@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
 import UserHeader from "@/components/UserHeader";
-import LandingAudioPlayer from "@/components/LandingAudioPlayer";
+import KidsVoicePlayer from "@/components/KidsVoicePlayer";
 import { createClient } from "@/utils/supabase/client";
 import {
   useSpeechRecognition,
@@ -561,32 +561,6 @@ const LANG_COPY = {
 };
 
 function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; onReplay: () => void }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const toggleAudioGuidance = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-        }
-      } else {
-        audioRef.current.play().catch(() => {});
-        setIsPlaying(true);
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          const utter = new SpeechSynthesisUtterance(
-            "Welcome to MEDICOBOT. Please select your preferred language to proceed with automated triage."
-          );
-          utter.onend = () => setIsPlaying(false);
-          utter.onerror = () => setIsPlaying(false);
-          window.speechSynthesis.speak(utter);
-        }
-      }
-    }
-  };
-
   return (
     <motion.div key="lang-stage"
       initial={{ opacity:0, y:40 }}
@@ -598,12 +572,6 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
 
       <MedCrossGrid />
 
-      <audio
-        ref={audioRef}
-        src="/audio/landing-voice.wav"
-        onEnded={() => setIsPlaying(false)}
-      />
-
       <motion.button
         onClick={onReplay}
         whileHover={{ scale: 1.05 }}
@@ -614,17 +582,7 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
         <span>← Replay Intro</span>
       </motion.button>
 
-      <motion.button
-        onClick={toggleAudioGuidance}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed top-6 right-6 z-50 inline-flex items-center gap-2 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold text-xs sm:text-sm rounded-full shadow-sm border border-teal-200 transition-all cursor-pointer"
-      >
-        <Volume2 size={15} className={`text-teal-600 ${isPlaying ? "animate-pulse" : ""}`} />
-        <span>{isPlaying ? "Pause Guidance" : "Listen Guidance / Welcome Voice"}</span>
-      </motion.button>
-
-      <LandingAudioPlayer />
+      <KidsVoicePlayer />
 
       <div className="relative z-10 text-center space-y-2">
         <div className="flex items-center justify-center gap-2 mb-4">
