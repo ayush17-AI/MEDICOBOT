@@ -25,6 +25,54 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
+export const normalizePhoneNumber = (transcript: string): string => {
+  if (!transcript) return "";
+  
+  // Convert transcript to lowercase
+  const lowerTranscript = transcript.toLowerCase();
+  
+  // Mapping of common spoken digit variations
+  const numberMap: { [key: string]: string } = {
+    // English
+    'zero': '0', 'oh': '0', 'nought': '0',
+    'one': '1', 'won': '1',
+    'two': '2', 'to': '2', 'too': '2',
+    'three': '3', 'tree': '3',
+    'four': '4', 'for': '4', 'fore': '4',
+    'five': '5',
+    'six': '6',
+    'seven': '7',
+    'eight': '8', 'ate': '8',
+    'nine': '9', 'nein': '9',
+    
+    // Hindi (Phonetic variations in transcript)
+    'शून्य': '0', 'shunya': '0', 'जीरो': '0',
+    'एक': '1', 'ek': '1',
+    'दो': '2', 'do': '2',
+    'तीन': '3', 'teen': '3',
+    'चार': '4', 'chaar': '4',
+    'पाँच': '5', 'panch': '5',
+    'छह': '6', 'cheh': '6',
+    'सात': '7', 'saat': '7',
+    'आठ': '8', 'aath': '8',
+    'नौ': '9', 'nau': '9',
+  };
+
+  // Create a regex to match these words as whole words
+  const wordsRegex = new RegExp(Object.keys(numberMap).map(word => `\\b${word}\\b`).join('|'), 'gi');
+
+  // Replace words with digits
+  const processedTranscript = lowerTranscript.replace(wordsRegex, (matched) => {
+    return numberMap[matched.toLowerCase()] || matched;
+  });
+
+  // Extract all final digit characters (0-9)
+  const finalDigits = processedTranscript.match(/\d/g);
+
+  // Return joined digits, capped at 10 for standard Indian phone numbers
+  return finalDigits ? finalDigits.join('').slice(0, 10) : "";
+};
+
 export function useSpeechRecognition({
   lang = "en",
   onTranscript,

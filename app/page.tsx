@@ -19,7 +19,7 @@ import {
   Globe, Calendar, ChevronRight, Stethoscope, Star, Clock, AlertTriangle,
   ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building,
 } from "lucide-react";
-import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { useSpeechRecognition, cleanTranscript, normalizePhoneNumber } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
    TYPES & DATA MODELS
@@ -721,11 +721,11 @@ function FormStage({
           setSex(t.sexOptions[2] || "Other / अन्य");
         }
       } else if (targetField === "phone") {
-        const digits = cleaned.replace(/\D/g, "");
-        setPhone(digits || cleaned);
+        const preciseDigits = normalizePhoneNumber(spokenText);
+        setPhone(preciseDigits || spokenText.replace(/\D/g, "").slice(0, 10));
       } else if (targetField === "emergency") {
-        const digits = cleaned.replace(/\D/g, "");
-        setEmergency(digits || cleaned);
+        const preciseDigits = normalizePhoneNumber(spokenText);
+        setEmergency(preciseDigits || spokenText.replace(/\D/g, "").slice(0, 10));
       }
     },
   });
@@ -821,18 +821,7 @@ function FormStage({
   );
 }
 
-/* ---------- Audio Normalization & Phrase Deduplication ---------- */
-function cleanTranscript(text: string): string {
-  if (!text) return "";
-  const fillers = /\b(uh+|um+|ah+|er+|like|you know|hmmm+|haa+|accha+|matlab+)\b/gi;
-  let cleaned = text.replace(fillers, " ");
-  // Remove word duplicates (e.g., "I I I am am")
-  cleaned = cleaned.replace(/\b(\w+)( \1\b)+/gi, "$1");
-  // Remove phrase loops (e.g., "chest pain chest pain")
-  cleaned = cleaned.replace(/(.{4,})( \1)+/gi, "$1");
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return cleaned;
-}
+
 
 function normalizeAudioTranscript(text: string): string {
   return cleanTranscript(text);
