@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
 import UserHeader from "@/components/UserHeader";
-import KidsVoicePlayer from "@/components/KidsVoicePlayer";
+import MedicobotAnimatedTitle from "@/components/MedicobotAnimatedTitle";
 import FloatingMedicalIcons from "@/components/FloatingMedicalIcons";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -583,7 +583,7 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
         <span>← Replay Intro</span>
       </motion.button>
 
-      <KidsVoicePlayer />
+      <MedicobotAnimatedTitle />
 
       <div className="relative z-10 text-center space-y-2">
         <div className="flex items-center justify-center gap-2 mb-4">
