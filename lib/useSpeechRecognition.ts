@@ -8,6 +8,19 @@ export interface SpeechRecognitionOptions {
   onNoiseDetected?: () => void;
 }
 
+// Module-level global reference for active speech recognition instance across component remounts & field switches
+let activeRecognitionInstance: any = null;
+
+export const stopVoiceSession = () => {
+  if (activeRecognitionInstance) {
+    try {
+      activeRecognitionInstance.abort();
+      activeRecognitionInstance.stop();
+    } catch (e) {}
+    activeRecognitionInstance = null;
+  }
+};
+
 export function cleanTranscript(text: string): string {
   if (!text) return "";
   // Strip filler words & background speech artifacts
@@ -25,11 +38,11 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const parsePhoneNumber = (rawTranscript: string): string => {
+export const cleanPhoneDigits = (rawTranscript: string): string => {
   if (!rawTranscript) return "";
 
   // Map word numbers to single digits
-  const wordToDigit: { [key: string]: string } = {
+  const digitWords: { [key: string]: string } = {
     'zero': '0', 'oh': '0', 'nought': '0', 'one': '1', 'won': '1',
     'two': '2', 'to': '2', 'too': '2', 'three': '3', 'tree': '3',
     'four': '4', 'for': '4', 'fore': '4', 'five': '5', 'six': '6',
@@ -40,69 +53,56 @@ export const parsePhoneNumber = (rawTranscript: string): string => {
     'चार': '4', 'पाँच': '5', 'छह': '6', 'सात': '7', 'आठ': '8', 'नौ': '9'
   };
 
-  let cleaned = rawTranscript.toLowerCase();
+  let str = rawTranscript.toLowerCase();
 
-  // Replace word numbers
-  Object.keys(wordToDigit).forEach((word) => {
+  Object.keys(digitWords).forEach((word) => {
     const reg = new RegExp(`\\b${word}\\b`, 'g');
-    cleaned = cleaned.replace(reg, wordToDigit[word]);
+    str = str.replace(reg, digitWords[word]);
   });
 
-  // Extract digits ONLY
-  const digits = cleaned.replace(/\D/g, '');
-
-  // Strip accidental leading country code '1' if length exceeds 10
-  let finalDigits = digits;
-  if (finalDigits.length > 10 && finalDigits.startsWith('1')) {
-    finalDigits = finalDigits.substring(1);
+  const digits = str.replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('1')) {
+    return digits.substring(1).slice(0, 10);
   }
-
-  return finalDigits.slice(0, 10);
+  return digits.slice(0, 10);
 };
 
-export const normalizePhoneNumber = parsePhoneNumber;
+export const parsePhoneNumber = cleanPhoneDigits;
+export const normalizePhoneNumber = cleanPhoneDigits;
 
-export const parseSexInput = (rawTranscript: string): "Male" | "Female" | "Other" => {
-  const text = rawTranscript.toLowerCase().trim();
+export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
+  const txt = rawTranscript.toLowerCase().trim();
 
-  // Explicit female keywords (check female first so "female" doesn't trigger "male")
   if (
-    text.includes("female") ||
-    text.includes("woman") ||
-    text.includes("girl") ||
-    text.includes("mahila") ||
-    text.includes("aurat") ||
-    text.includes("महिला") ||
-    text.includes("स्त्री")
+    txt.includes("female") ||
+    txt.includes("woman") ||
+    txt.includes("girl") ||
+    txt.includes("mahila") ||
+    txt.includes("aurat") ||
+    txt.includes("महिला") ||
+    txt.includes("स्त्री")
   ) {
     return "Female";
   }
 
-  // Explicit male keywords
   if (
-    text.includes("male") ||
-    text.includes("man") ||
-    text.includes("boy") ||
-    text.includes("purush") ||
-    text.includes("aadmi") ||
-    text.includes("पुरुष")
+    txt.includes("male") ||
+    txt.includes("man") ||
+    txt.includes("boy") ||
+    txt.includes("purush") ||
+    txt.includes("aadmi") ||
+    txt.includes("पुरुष")
   ) {
     return "Male";
   }
 
-  // Explicit intersex / trans / other keyword
-  if (
-    text.includes("intersex") ||
-    text.includes("trans") ||
-    text.includes("other") ||
-    text.includes("अन्य")
-  ) {
-    return "Other";
-  }
+  if (txt.includes("intersex")) return "Intersex";
+  if (txt.includes("trans") || txt.includes("other") || txt.includes("अन्य")) return "Other";
 
-  // Default fallback if unclear
   return "Male";
 };
+
+export const parseSexInput = cleanGenderInput;
 
 export function useSpeechRecognition({
   lang = "en",
@@ -123,13 +123,11 @@ export function useSpeechRecognition({
     isListeningRef.current = isListening;
   }, [isListening]);
 
-  // Stop listening & cleanup audio nodes (ONLY on explicit manual toggle off)
+  // Stop listening & cleanup audio nodes (ONLY on explicit manual toggle off or session reset)
   const stopListening = useCallback(() => {
     isListeningRef.current = false;
+    stopVoiceSession();
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
       recognitionRef.current = null;
     }
     if (mediaStreamRef.current) {
@@ -143,10 +141,13 @@ export function useSpeechRecognition({
     setIsListening(false);
   }, []);
 
-  // Start continuous listening with 85Hz High-Pass & 3400Hz Low-Pass Audio DSP + Permanent Keep-Alive
+  // Start continuous listening with 85Hz High-Pass & 3400Hz Low-Pass Audio DSP + Instant Re-Trigger Session Reset
   const startListening = useCallback(async () => {
     setNoiseAlert(false);
     if (typeof window === "undefined") return;
+
+    // FORCE KILL ANY STALE / PREVIOUS VOICE SESSION INSTANCE FIRST
+    stopVoiceSession();
 
     // Set persistent state lock
     isListeningRef.current = true;
@@ -201,13 +202,14 @@ export function useSpeechRecognition({
     try {
       const recognition = new SpeechRec();
       recognitionRef.current = recognition;
+      activeRecognitionInstance = recognition;
       recognition.continuous = true; // PERSISTENT CONTINUOUS LISTENING
       recognition.interimResults = true;
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
       recognition.onresult = (event: any) => {
         let fullTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        for (let i = 0; i < event.results.length; i++) {
           const res = event.results[i];
           const confidence = res[0]?.confidence ?? 1;
 
@@ -240,6 +242,14 @@ export function useSpeechRecognition({
 
       recognition.onerror = (e: any) => {
         console.warn("Speech recognition error:", e?.error);
+        if (e?.error === "no-speech" || e?.error === "network") {
+          if (isListeningRef.current) {
+            try {
+              recognition.stop();
+              recognition.start(); // Instant auto-recovery
+            } catch (err) {}
+          }
+        }
       };
 
       // AGGRESSIVE AUTO-RESTART KEEP-ALIVE LOOP

@@ -25,6 +25,9 @@ import {
   normalizePhoneNumber,
   parsePhoneNumber,
   parseSexInput,
+  cleanPhoneDigits,
+  cleanGenderInput,
+  stopVoiceSession,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -737,6 +740,7 @@ function FormStage({
   });
 
   const toggleMic = (field: string) => {
+    stopVoiceSession();
     if (activeMic === field) {
       setActiveMic(null);
       stopListening();
