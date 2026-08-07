@@ -17,9 +17,10 @@ import {
 import {
   Mic, MicOff, ArrowRight, ArrowLeft, RotateCcw, Phone, User, Heart,
   Globe, Calendar, ChevronRight, Stethoscope, Star, Clock, AlertTriangle,
-  ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building,
+  ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building, LogOut,
 } from "lucide-react";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
+import { createClient } from "@/utils/supabase/client";
 import {
   useSpeechRecognition,
   cleanTranscript,
@@ -476,6 +477,23 @@ function MedCrossGrid() {
 }
 
 function HeaderBar({ lang, title }: { lang: Lang; title?: string }) {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
   return (
     <motion.header initial={{ y:-20, opacity:0 }} animate={{ y:0, opacity:1 }}
       transition={{ duration:.5 }}
@@ -490,11 +508,27 @@ function HeaderBar({ lang, title }: { lang: Lang; title?: string }) {
       <p className="hidden sm:block text-[11px] text-slate-500 font-semibold text-center max-w-xs leading-tight">
         {title || "AI-Driven Smart Triage & Automated OPD Orchestration"}
       </p>
-      <div className="flex items-center gap-2">
-        <Globe size={14} className="text-slate-400" />
-        <span className="text-xs font-semibold text-teal-700">
-          {lang === "hi" ? "हिंदी" : "English"}
-        </span>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <Globe size={14} className="text-slate-400" />
+          <span className="text-xs font-semibold text-teal-700">
+            {lang === "hi" ? "हिंदी" : "English"}
+          </span>
+        </div>
+        {user && (
+          <div className="flex items-center gap-2">
+            <span className="hidden md:inline-block text-[11px] font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+              {user.email}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg border border-red-200 transition cursor-pointer shadow-sm"
+            >
+              <LogOut size={13} />
+              <span>Logout</span>
+            </button>
+          </div>
+        )}
       </div>
     </motion.header>
   );
@@ -525,6 +559,32 @@ const LANG_COPY = {
 };
 
 function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; onReplay: () => void }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const toggleAudioGuidance = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+        }
+      } else {
+        audioRef.current.play().catch(() => {});
+        setIsPlaying(true);
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          const utter = new SpeechSynthesisUtterance(
+            "Welcome to MEDICOBOT. Please select your preferred language to proceed with automated triage."
+          );
+          utter.onend = () => setIsPlaying(false);
+          utter.onerror = () => setIsPlaying(false);
+          window.speechSynthesis.speak(utter);
+        }
+      }
+    }
+  };
+
   return (
     <motion.div key="lang-stage"
       initial={{ opacity:0, y:40 }}
@@ -536,6 +596,12 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
 
       <MedCrossGrid />
 
+      <audio
+        ref={audioRef}
+        src="/audio/landing-voice.wav"
+        onEnded={() => setIsPlaying(false)}
+      />
+
       <motion.button
         onClick={onReplay}
         whileHover={{ scale: 1.05 }}
@@ -544,6 +610,16 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
       >
         <RotateCcw size={14} className="text-slate-600" />
         <span>← Replay Intro</span>
+      </motion.button>
+
+      <motion.button
+        onClick={toggleAudioGuidance}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className="fixed top-6 right-6 z-50 inline-flex items-center gap-2 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold text-xs sm:text-sm rounded-full shadow-sm border border-teal-200 transition-all cursor-pointer"
+      >
+        <Volume2 size={15} className={`text-teal-600 ${isPlaying ? "animate-pulse" : ""}`} />
+        <span>{isPlaying ? "Pause Guidance" : "Listen Guidance / Welcome Voice"}</span>
       </motion.button>
 
       <div className="relative z-10 text-center space-y-2">
@@ -1847,14 +1923,55 @@ export default function Page() {
     setPhase("logo");
   }, []);
 
-  const handleFormProceed = useCallback((data: PatientInfo) => {
+  const handleFormProceed = useCallback(async (data: PatientInfo) => {
     setPatient(data);
     setPhase("symptoms");
+
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('patient_records')
+          .insert([
+            {
+              user_id: user.id,
+              patient_name: data.name,
+              phone_number: data.phone,
+              symptoms: '',
+              kiosk_data: data
+            }
+          ]);
+      }
+    } catch (err) {
+      console.warn("Supabase record insert notice:", err);
+    }
   }, []);
 
   const handleAnalyzeSymptoms = useCallback(async (symptoms: string) => {
     const cleanedSymptoms = cleanTranscript(symptoms);
     setSymptomsText(cleanedSymptoms);
+
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('patient_records')
+          .insert([
+            {
+              user_id: user.id,
+              patient_name: patient.name,
+              phone_number: patient.phone,
+              symptoms: cleanedSymptoms,
+              kiosk_data: { ...patient, symptomsText: cleanedSymptoms }
+            }
+          ]);
+      }
+    } catch (err) {
+      console.warn("Supabase symptom record sync notice:", err);
+    }
+
     try {
       const res = await fetch("/api/triage", {
         method: "POST",
@@ -1887,7 +2004,7 @@ export default function Page() {
     } finally {
       setPhase("decision");
     }
-  }, []);
+  }, [patient]);
 
   const handleChooseMode = useCallback((mode: SelectMode) => {
     setSelectMode(mode);
