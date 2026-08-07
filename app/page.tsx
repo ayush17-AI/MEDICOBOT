@@ -384,13 +384,47 @@ function Wordmark({ smoking }: { smoking: boolean }) {
   );
 }
 
+const triggerCuteMedicobotVoice = () => {
+  try {
+    const audio = new Audio('/sounds/medicobot-kid.mp3');
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        fallbackCuteKidVoice();
+      });
+    }
+  } catch (e) {
+    fallbackCuteKidVoice();
+  }
+};
+
+function fallbackCuteKidVoice() {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance("Medicobot!");
+    utterance.pitch = 1.9; // High pitch for cute child voice
+    utterance.rate = 1.1;  // Energetic pace
+    utterance.volume = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
 function LogoStage({ onDone }: { onDone: () => void }) {
   const [smoking, setSmoking] = useState(false);
 
   useEffect(() => {
+    // Trigger cute child voice announcement right when logo assembly completes
+    const voiceTimer = setTimeout(() => {
+      triggerCuteMedicobotVoice();
+    }, TITLE_DONE * 1000);
+
     const t1 = setTimeout(() => setSmoking(true),  PHASE_CHANGE * 1000 - 900);
     const t2 = setTimeout(() => onDone(),           PHASE_CHANGE * 1000 + 200);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    return () => {
+      clearTimeout(voiceTimer);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [onDone]);
 
   return (
@@ -472,10 +506,6 @@ const LANG_COPY = {
 };
 
 function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; onReplay: () => void }) {
-  useEffect(() => {
-    speakText("Welcome to MEDICOBOT. Please select your preferred language.", "en");
-  }, []);
-
   return (
     <motion.div key="lang-stage"
       initial={{ opacity:0, y:40 }}
