@@ -31,6 +31,7 @@ import {
   processPhoneVoiceInput,
   sanitizePhoneDigits,
   parseWhisperPhoneDigits,
+  getProductionAudioStream,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -747,7 +748,7 @@ function FormStage({
 
   const startPhoneWhisperRecording = async (field: "phone" | "emergency") => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getProductionAudioStream();
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];

@@ -21,6 +21,33 @@ export const stopVoiceSession = () => {
   }
 };
 
+export const ensureAudioContextActive = async (audioCtx: AudioContext) => {
+  if (audioCtx && audioCtx.state === 'suspended') {
+    try {
+      await audioCtx.resume();
+    } catch (e) {
+      console.warn('AudioContext resume failed:', e);
+    }
+  }
+};
+
+export const getProductionAudioStream = async (): Promise<MediaStream> => {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1, // Mono channel to reduce blob payload size on Vercel
+        sampleRate: 16000, // Ideal sample rate for Groq Whisper API
+      },
+    });
+  } catch (err) {
+    console.warn('Falling back to basic audio constraints for live domain:', err);
+    return await navigator.mediaDevices.getUserMedia({ audio: true });
+  }
+};
+
 export function cleanTranscript(text: string): string {
   if (!text) return "";
   // Strip filler words & background speech artifacts
@@ -164,20 +191,17 @@ export function useSpeechRecognition({
 
     // 1. Initialize Web Audio API DSP Filter Node (85Hz High-Pass & 3400Hz Low-Pass)
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function") {
+        const stream = await getProductionAudioStream();
         mediaStreamRef.current = stream;
 
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContextClass) {
           const audioCtx = new AudioContextClass();
           audioCtxRef.current = audioCtx;
+
+          // Resume suspended audio context for live HTTPS policy
+          await ensureAudioContextActive(audioCtx);
 
           const source = audioCtx.createMediaStreamSource(stream);
 
