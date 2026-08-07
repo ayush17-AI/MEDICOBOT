@@ -316,12 +316,21 @@ export default function ConsultationClient() {
               </p>
             </div>
 
-            <button
-              onClick={handleSilentDispatch}
-              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3 cursor-pointer"
+            <a
+              href={generateDirectWhatsAppUrl({
+                patientName: patient?.name || patient?.fullName || 'Patient',
+                phoneNumber: patient?.phone || patient?.mobile || '9461112639',
+                countryCode: patient?.countryCode || '91',
+                appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
+                tokenNumber: tokenGenerated || undefined,
+                doctorName: selectedDoctor?.name || 'General Physician',
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3 cursor-pointer"
             >
-              📲 Dispatch Confirmation (Silent Backend Process)
-            </button>
+              💬 Send OPD Confirmation via WhatsApp
+            </a>
 
             {/* Primary Action Button: Unlock & Navigate to Doctor Workstation */}
             <div className="pt-4 flex justify-center">
