@@ -17,15 +17,16 @@ import {
   User,
   Building,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { useSpeechRecognition, cleanTranscript } from '@/lib/useSpeechRecognition';
 
 export default function SymptomsClient() {
   const router = useRouter();
   const [patient, setPatient] = useState<any>(null);
   const [vitals, setVitals] = useState<any>(null);
   const [symptoms, setSymptoms] = useState('');
-  const [isListening, setIsListening] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [triageResult, setTriageResult] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
@@ -41,6 +42,28 @@ export default function SymptomsClient() {
       console.warn('Failed to load session payload:', e);
     }
   }, []);
+
+  const {
+    isListening,
+    startListening,
+    stopListening,
+  } = useSpeechRecognition({
+    lang: 'en',
+    onTranscript: (spokenText) => {
+      if (spokenText) {
+        const cleaned = cleanTranscript(spokenText);
+        setSymptoms((prev) => (prev ? `${prev} ${cleaned}` : cleaned));
+      }
+    },
+  });
+
+  const toggleRecording = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!symptoms.trim()) return;
@@ -98,11 +121,11 @@ export default function SymptomsClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 relative p-4 sm:p-8 flex flex-col items-center overflow-y-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-blue-50/30 relative p-4 sm:p-8 flex flex-col items-center overflow-y-auto">
       <div className="absolute top-10 left-10 w-96 h-96 bg-teal-200/30 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-4xl space-y-6 my-4">
+      <div className="relative z-10 w-full max-w-6xl mx-auto space-y-6 my-4 px-4">
         {/* Header */}
         <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -161,18 +184,36 @@ export default function SymptomsClient() {
           </div>
         )}
 
-        {/* Symptom Input Form */}
+        {/* Symptom Input Form with Restored Voice Mic Button */}
         <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Describe Your Health Symptoms <span className="text-red-500 font-black">*</span>
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Describe Your Health Symptoms <span className="text-red-500 font-black">*</span>
+              </label>
+
+              {/* Interactive Speech Recorder Button */}
+              <button
+                type="button"
+                onClick={toggleRecording}
+                data-testid="voice-recorder-btn"
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200'
+                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+                }`}
+              >
+                {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+                <span>{isListening ? '⏹️ Stop Recording (Listening...)' : '🎙️ Speak Symptoms'}</span>
+              </button>
+            </div>
+
             <div className="relative">
               <textarea
                 rows={4}
                 value={symptoms}
                 onChange={(e) => setSymptoms(e.target.value)}
-                placeholder="e.g. I have had a high fever for 2 days, severe headache, muscle aches, and mild sore throat..."
+                placeholder="Tap 🎙️ Speak Symptoms or type here (e.g. I have had a high fever for 2 days, severe headache, muscle aches, and mild sore throat...)"
                 data-testid="symptoms-textarea"
                 className="w-full p-4 rounded-2xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 text-sm font-medium outline-none text-slate-900 placeholder:text-slate-400 shadow-xs"
               />
