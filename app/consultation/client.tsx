@@ -317,25 +317,21 @@ export default function ConsultationClient() {
               </p>
             </div>
 
-            <div className="w-full space-y-3 mt-4">
-              <button
-                onClick={handleSilentNotificationDispatch}
-                disabled={isDispatching}
-                className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 active:scale-[0.99] text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isDispatching ? (
-                  <span>⚡ Dispatching Omnichannel Notification...</span>
-                ) : (
-                  <span>📲 Dispatch Confirmation (WhatsApp / SMS Engine)</span>
-                )}
-              </button>
-
-              {dispatchStatus && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl text-center animate-fade-in flex items-center justify-center gap-2">
-                  <span>{dispatchStatus}</span>
-                </div>
-              )}
-            </div>
+            <a
+              href={generateDirectWhatsAppUrl({
+                patientName: patient?.name || patient?.fullName || 'Patient',
+                phoneNumber: patient?.phone || patient?.mobile || '9461112639',
+                countryCode: patient?.countryCode || '91',
+                appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
+                tokenNumber: tokenGenerated || '#MED-1150',
+                doctorName: selectedDoctor?.name || 'General Physician',
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3 cursor-pointer"
+            >
+              💬 Send OPD Confirmation via WhatsApp
+            </a>
 
             {/* Primary Action Button: Unlock & Navigate to Doctor Workstation */}
             <div className="pt-4 flex justify-center">

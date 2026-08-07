@@ -8,21 +8,21 @@ export interface WhatsAppDetails {
 }
 
 export function sanitizeIndianPhone(phone: string, countryCode: string = '91'): string {
-  // 1. Extract only digits
-  let digits = phone.replace(/\D/g, '');
-  let code = countryCode.replace(/\D/g, '') || '91';
+  // 1. Keep only numeric digits
+  let digits = (phone || '').replace(/\D/g, '');
+  let code = (countryCode || '91').replace(/\D/g, '') || '91';
 
-  // 2. Remove duplicate leading country code if present (e.g. 919461112639 -> 9461112639)
+  // 2. Fix duplicate leading country code (e.g., 919461112639 -> 9461112639)
   if (digits.length > 10 && digits.startsWith(code)) {
     digits = digits.slice(code.length);
   }
 
-  // 3. Take last 10 digits
+  // 3. Take strictly the last 10 digits
   if (digits.length > 10) {
     digits = digits.slice(-10);
   }
 
-  // Return clean full phone without spaces or symbols
+  // Return clean country code + 10 digit number without spaces or '+'
   return `${code}${digits}`;
 }
 
@@ -51,7 +51,7 @@ Your appointment registration is successful!
 👨‍⚕️ *Doctor:* ${details.doctorName || 'General Physician'}
 📍 *Location:* Room 204, OPD Cabinet
 
-Please arrive on time. Wish you good health!`;
+Please arrive 10 mins prior to your schedule. Wish you good health!`;
 
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMessage)}`;
 }
