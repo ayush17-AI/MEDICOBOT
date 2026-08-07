@@ -32,6 +32,8 @@ import {
   sanitizePhoneDigits,
   parseWhisperPhoneDigits,
   getProductionAudioStream,
+  getCleanMicStream,
+  parsePhoneDigitsStrict,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -748,7 +750,7 @@ function FormStage({
 
   const startPhoneWhisperRecording = async (field: "phone" | "emergency") => {
     try {
-      const stream = await getProductionAudioStream();
+      const stream = await getCleanMicStream();
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -772,7 +774,7 @@ function FormStage({
 
           const data = await res.json();
           if (data.text) {
-            const parsedNumber = parseWhisperPhoneDigits(data.text);
+            const parsedNumber = parsePhoneDigitsStrict(data.text);
             if (field === "phone") {
               setPhone(parsedNumber);
             } else {
@@ -783,7 +785,9 @@ function FormStage({
           console.error('Groq Whisper Transcription Failed:', err);
         }
 
-        stream.getTracks().forEach((track) => track.stop());
+        try {
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (e) {}
       };
 
       mediaRecorder.start();

@@ -8,27 +8,89 @@ export interface SpeechRecognitionOptions {
   onNoiseDetected?: () => void;
 }
 
+declare global {
+  interface Window {
+    currentAudioStream?: MediaStream | null;
+  }
+}
+
 // Module-level global reference for active speech recognition instance across component remounts & field switches
 let activeRecognitionInstance: any = null;
 let globalLiveStream: MediaStream | null = null;
+
+export const getCleanMicStream = async (): Promise<MediaStream> => {
+  if (typeof window !== "undefined" && window.currentAudioStream) {
+    try {
+      window.currentAudioStream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+    } catch (e) {
+      console.warn("Track stop warning:", e);
+    }
+    window.currentAudioStream = null;
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
+
+  if (typeof window !== "undefined") {
+    window.currentAudioStream = stream;
+  }
+  return stream;
+};
 
 export const initializeProductionMic = async (): Promise<MediaStream | null> => {
   try {
     if (typeof window === "undefined") return null;
     if (!globalLiveStream || !globalLiveStream.active) {
-      globalLiveStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      globalLiveStream = await getCleanMicStream();
     }
     return globalLiveStream;
   } catch (err) {
     console.error("HTTPS Mic Access Error:", err);
     return null;
   }
+};
+
+export const parsePhoneDigitsStrict = (rawText: string): string => {
+  if (!rawText) return "";
+
+  const wordToNumberMap: { [key: string]: string } = {
+    'zero': '0', 'oh': '0', 'shunya': '0', 'जीरो': '0', 'शून्य': '0',
+    'one': '1', 'won': '1', 'ek': '1', 'एक': '1',
+    'two': '2', 'to': '2', 'too': '2', 'do': '2', 'दो': '2',
+    'three': '3', 'tree': '3', 'teen': '3', 'तीन': '3',
+    'four': '4', 'for': '4', 'fore': '4', 'chaar': '4', 'चार': '4',
+    'five': '5', 'paanch': '5', 'panch': '5', 'पाँच': '5',
+    'six': '6', 'cheh': '6', 'छह': '6',
+    'seven': '7', 'saat': '7', 'सात': '7',
+    'eight': '8', 'ate': '8', 'aath': '8', 'आठ': '8',
+    'nine': '9', 'nein': '9', 'nau': '9', 'नौ': '9'
+  };
+
+  let processed = rawText.toLowerCase();
+
+  // Convert phrases like "triple one" or "double seven"
+  processed = processed.replace(/triple (\w+)/g, '$1 $1 $1');
+  processed = processed.replace(/double (\w+)/g, '$1 $1');
+
+  Object.keys(wordToNumberMap).forEach((word) => {
+    const reg = new RegExp(`\\b${word}\\b`, 'g');
+    processed = processed.replace(reg, wordToNumberMap[word]);
+  });
+
+  // Extract digits only
+  let digits = processed.replace(/\D/g, '');
+
+  // Remove leading 1 or 0 if it exceeds 10 digits
+  if (digits.length > 10 && (digits.startsWith('1') || digits.startsWith('0'))) {
+    digits = digits.substring(1);
+  }
+
+  return digits.slice(0, 10);
 };
 
 export const startProductionVoiceCapture = async (
@@ -103,23 +165,7 @@ export const ensureAudioContextActive = async (audioCtx: AudioContext) => {
 };
 
 export const getProductionAudioStream = async (): Promise<MediaStream> => {
-  const liveStream = await initializeProductionMic();
-  if (liveStream) return liveStream;
-
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1, // Mono channel to reduce blob payload size on Vercel
-        sampleRate: 16000, // Ideal sample rate for Groq Whisper API
-      },
-    });
-  } catch (err) {
-    console.warn('Falling back to basic audio constraints for live domain:', err);
-    return await navigator.mediaDevices.getUserMedia({ audio: true });
-  }
+  return await getCleanMicStream();
 };
 
 export function cleanTranscript(text: string): string {
@@ -139,46 +185,12 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const parseWhisperPhoneDigits = (rawText: string): string => {
-  if (!rawText) return "";
-  let text = rawText.toLowerCase();
-
-  // Convert phrases like "triple one" or "double seven"
-  text = text.replace(/triple (\w+)/g, '$1 $1 $1');
-  text = text.replace(/double (\w+)/g, '$1 $1');
-
-  const wordMap: { [key: string]: string } = {
-    'zero': '0', 'oh': '0', 'shunya': '0', 'जीरो': '0', 'शून्य': '0',
-    'one': '1', 'won': '1', 'ek': '1', 'एक': '1',
-    'two': '2', 'to': '2', 'too': '2', 'do': '2', 'दो': '2',
-    'three': '3', 'tree': '3', 'teen': '3', 'तीन': '3',
-    'four': '4', 'for': '4', 'fore': '4', 'chaar': '4', 'चार': '4',
-    'five': '5', 'paanch': '5', 'panch': '5', 'पाँच': '5',
-    'six': '6', 'cheh': '6', 'छह': '6',
-    'seven': '7', 'saat': '7', 'सात': '7',
-    'eight': '8', 'ate': '8', 'aath': '8', 'आठ': '8',
-    'nine': '9', 'nein': '9', 'nau': '9', 'नौ': '9'
-  };
-
-  Object.keys(wordMap).forEach((word) => {
-    const reg = new RegExp(`\\b${word}\\b`, 'g');
-    text = text.replace(reg, wordMap[word]);
-  });
-
-  const digits = text.replace(/\D/g, '');
-  if (digits.length > 10 && digits.startsWith('1')) {
-    return digits.substring(1).slice(0, 10);
-  } else if (digits.length === 11 && digits.startsWith('0')) {
-    return digits.substring(1).slice(0, 10);
-  }
-  return digits.slice(0, 10);
-};
-
-export const sanitizePhoneDigits = parseWhisperPhoneDigits;
-export const processPhoneVoiceInput = parseWhisperPhoneDigits;
-export const cleanPhoneDigits = parseWhisperPhoneDigits;
-export const parsePhoneNumber = parseWhisperPhoneDigits;
-export const normalizePhoneNumber = parseWhisperPhoneDigits;
+export const parseWhisperPhoneDigits = parsePhoneDigitsStrict;
+export const sanitizePhoneDigits = parsePhoneDigitsStrict;
+export const processPhoneVoiceInput = parsePhoneDigitsStrict;
+export const cleanPhoneDigits = parsePhoneDigitsStrict;
+export const parsePhoneNumber = parsePhoneDigitsStrict;
+export const normalizePhoneNumber = parsePhoneDigitsStrict;
 
 export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
   const txt = rawTranscript.toLowerCase().trim();
@@ -241,7 +253,7 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
     }
     if (mediaStreamRef.current) {
-      // Keep persistent audio stream alive for HTTPS session continuity
+      // Keep track cleanup managed via getCleanMicStream
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
       audioCtxRef.current.close().catch(() => {});
@@ -264,34 +276,31 @@ export function useSpeechRecognition({
 
     // 1. Pre-warm production mic & Initialize Web Audio API DSP Filter Node
     try {
-      await initializeProductionMic();
-      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function") {
-        const stream = await getProductionAudioStream();
-        mediaStreamRef.current = stream;
+      const stream = await getCleanMicStream();
+      mediaStreamRef.current = stream;
 
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          const audioCtx = new AudioContextClass();
-          audioCtxRef.current = audioCtx;
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const audioCtx = new AudioContextClass();
+        audioCtxRef.current = audioCtx;
 
-          // Resume suspended audio context for live HTTPS policy
-          await ensureAudioContextActive(audioCtx);
+        // Resume suspended audio context for live HTTPS policy
+        await ensureAudioContextActive(audioCtx);
 
-          const source = audioCtx.createMediaStreamSource(stream);
+        const source = audioCtx.createMediaStreamSource(stream);
 
-          // Low-cut filter to eliminate background rumble (85Hz)
-          const highPass = audioCtx.createBiquadFilter();
-          highPass.type = "highpass";
-          highPass.frequency.setValueAtTime(85, audioCtx.currentTime);
+        // Low-cut filter to eliminate background rumble (85Hz)
+        const highPass = audioCtx.createBiquadFilter();
+        highPass.type = "highpass";
+        highPass.frequency.setValueAtTime(85, audioCtx.currentTime);
 
-          // High-cut filter to attenuate high-frequency chatter (3400Hz)
-          const lowPass = audioCtx.createBiquadFilter();
-          lowPass.type = "lowpass";
-          lowPass.frequency.setValueAtTime(3400, audioCtx.currentTime);
+        // High-cut filter to attenuate high-frequency chatter (3400Hz)
+        const lowPass = audioCtx.createBiquadFilter();
+        lowPass.type = "lowpass";
+        lowPass.frequency.setValueAtTime(3400, audioCtx.currentTime);
 
-          source.connect(highPass);
-          highPass.connect(lowPass);
-        }
+        source.connect(highPass);
+        highPass.connect(lowPass);
       }
     } catch (e) {
       console.warn("Web Audio DSP filter initialization fallback:", e);
