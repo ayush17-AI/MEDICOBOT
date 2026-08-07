@@ -18,6 +18,15 @@ declare global {
 let activeRecognitionInstance: any = null;
 let globalLiveStream: MediaStream | null = null;
 
+export const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 export const getCleanMicStream = async (): Promise<MediaStream> => {
   if (typeof window !== "undefined" && window.currentAudioStream) {
     try {
@@ -92,6 +101,15 @@ export const parsePhoneDigitsStrict = (rawText: string): string => {
 
   return digits.slice(0, 10);
 };
+
+export const cleanDigitsOnly = parsePhoneDigitsStrict;
+export const parseWhisperPhoneDigits = parsePhoneDigitsStrict;
+export const sanitizePhoneDigits = parsePhoneDigitsStrict;
+export const processPhoneVoiceInput = parsePhoneDigitsStrict;
+export const cleanPhoneDigits = parsePhoneDigitsStrict;
+export const parsePhoneNumber = parsePhoneDigitsStrict;
+export const normalizePhoneNumber = parsePhoneDigitsStrict;
+export const extractCleanPhoneDigits = parsePhoneDigitsStrict;
 
 export const startProductionVoiceCapture = async (
   onResult: (text: string) => void,
@@ -185,14 +203,6 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const parseWhisperPhoneDigits = parsePhoneDigitsStrict;
-export const sanitizePhoneDigits = parsePhoneDigitsStrict;
-export const processPhoneVoiceInput = parsePhoneDigitsStrict;
-export const cleanPhoneDigits = parsePhoneDigitsStrict;
-export const parsePhoneNumber = parsePhoneDigitsStrict;
-export const normalizePhoneNumber = parsePhoneDigitsStrict;
-export const extractCleanPhoneDigits = parsePhoneDigitsStrict;
-
 export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
   const txt = rawTranscript.toLowerCase().trim();
 
@@ -254,7 +264,7 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
     }
     if (mediaStreamRef.current) {
-      // Keep track cleanup managed via getCleanMicStream
+      // Track cleanup managed via getCleanMicStream
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
       audioCtxRef.current.close().catch(() => {});

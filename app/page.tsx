@@ -36,6 +36,8 @@ import {
   parsePhoneDigitsStrict,
   extractCleanPhoneDigits,
   startProductionVoiceCapture,
+  blobToBase64,
+  cleanDigitsOnly,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -765,20 +767,21 @@ function FormStage({
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const formData = new FormData();
-        formData.append('file', audioBlob);
-
         let success = false;
         try {
+          const audioBase64 = await blobToBase64(audioBlob);
           const res = await fetch('/api/whisper', {
             method: 'POST',
-            body: formData,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ audioBase64 }),
           });
 
           if (res.ok) {
             const data = await res.json();
             if (data.text) {
-              const parsedNumber = extractCleanPhoneDigits(data.text);
+              const parsedNumber = cleanDigitsOnly(data.text);
               if (field === "phone") {
                 setPhone(parsedNumber);
               } else {
@@ -788,14 +791,14 @@ function FormStage({
             }
           }
         } catch (err) {
-          console.error('Groq Whisper Transcription Failed:', err);
+          console.error('Groq Whisper Base64 Transcription Failed:', err);
         }
 
         if (!success) {
           console.warn('Groq Whisper failed or empty, fallback to client-side voice capture');
           startProductionVoiceCapture(
             (spokenText) => {
-              const digits = extractCleanPhoneDigits(spokenText);
+              const digits = cleanDigitsOnly(spokenText);
               if (field === "phone") setPhone(digits);
               else setEmergency(digits);
             },
