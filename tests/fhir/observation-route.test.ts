@@ -4,9 +4,10 @@ import { NextRequest } from "next/server";
 vi.mock("../../fhir/data/repository", () => ({
   createVitalOrSymptom: vi.fn(),
   searchVitalsByPatient: vi.fn(),
+  getAllObservations: vi.fn().mockResolvedValue([]),
 }));
 
-import { createVitalOrSymptom, searchVitalsByPatient } from "../../fhir/data/repository";
+import { createVitalOrSymptom, searchVitalsByPatient, getAllObservations } from "../../fhir/data/repository";
 import { GET, POST } from "../../app/api/fhir/Observation/route";
 
 describe("GET /fhir/Observation?patient=", () => {
@@ -32,11 +33,13 @@ describe("GET /fhir/Observation?patient=", () => {
     expect(body.entry[0].resource.code.coding[0].code).toBe("8867-4");
   });
 
-  it("returns 400 when patient query param is missing", async () => {
+  it("returns 200 searchset Bundle when patient query param is missing", async () => {
+    (getAllObservations as any).mockResolvedValue([]);
     const res = await GET(new NextRequest("http://localhost/fhir/Observation"));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.resourceType).toBe("OperationOutcome");
+    expect(body.resourceType).toBe("Bundle");
+    expect(body.type).toBe("searchset");
   });
 });
 

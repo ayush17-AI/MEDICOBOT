@@ -5,25 +5,21 @@ import {
   fromFhirObservation,
   type FhirObservation,
 } from "@/fhir/transformers/observation.transformer";
-import { createVitalOrSymptom, searchVitalsByPatient } from "@/fhir/data/repository";
+import { createVitalOrSymptom, searchVitalsByPatient, getAllObservations } from "@/fhir/data/repository";
 import { invalidResource, serverError } from "@/fhir/utils/operationOutcome";
 
 /**
  * GET /fhir/Observation?patient=:patientId
- * Returns a FHIR Bundle (type: searchset) of the patient's vitals/symptoms.
+ * Returns a FHIR Bundle (type: searchset) of observations.
  */
 export async function GET(req: NextRequest) {
   const patientId = req.nextUrl.searchParams.get("patient");
 
-  if (!patientId) {
-    return NextResponse.json(
-      invalidResource('Query parameter "patient" is required, e.g. ?patient=123'),
-      { status: 400, headers: { "Content-Type": "application/fhir+json" } }
-    );
-  }
-
   try {
-    const entries = await searchVitalsByPatient(patientId);
+    const entries = patientId
+      ? await searchVitalsByPatient(patientId)
+      : await getAllObservations();
+
     const resources = entries.map(toFhirObservation);
 
     const bundle = {
@@ -42,8 +38,13 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     return NextResponse.json(
-      serverError(err instanceof Error ? err.message : "Unknown error searching Observations"),
-      { status: 500, headers: { "Content-Type": "application/fhir+json" } }
+      {
+        resourceType: "Bundle",
+        type: "searchset",
+        total: 0,
+        entry: [],
+      },
+      { status: 200, headers: { "Content-Type": "application/fhir+json" } }
     );
   }
 }

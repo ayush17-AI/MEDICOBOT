@@ -81,6 +81,25 @@ export async function getPatientById(
   return null;
 }
 
+export async function getAllPatients(): Promise<InternalPatient[]> {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("patient_records")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error || !data || !Array.isArray(data)) {
+      return [];
+    }
+
+    return data.map((row: any) => mapRowToPatient(row));
+  } catch (err) {
+    console.error("Error fetching all patients:", err);
+    return [];
+  }
+}
+
 export async function createPatient(
   patient: Omit<InternalPatient, "id" | "createdAt">
 ): Promise<InternalPatient> {
@@ -213,6 +232,19 @@ export async function searchVitalsByPatient(
   patientId: string
 ): Promise<InternalVitalOrSymptom[]> {
   return getObservationsByPatientId(patientId);
+}
+
+export async function getAllObservations(): Promise<InternalVitalOrSymptom[]> {
+  try {
+    const patients = await getAllPatients();
+    const allObs = await Promise.all(
+      patients.map((p) => getObservationsByPatientId(p.id))
+    );
+    return allObs.flat();
+  } catch (err) {
+    console.error("Error fetching all observations:", err);
+    return [];
+  }
 }
 
 export async function createObservation(

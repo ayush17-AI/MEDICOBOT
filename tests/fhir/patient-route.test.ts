@@ -4,10 +4,11 @@ import { NextRequest } from "next/server";
 vi.mock("../../fhir/data/repository", () => ({
   createPatient: vi.fn(),
   getPatientById: vi.fn(),
+  getAllPatients: vi.fn().mockResolvedValue([]),
 }));
 
-import { createPatient, getPatientById } from "../../fhir/data/repository";
-import { POST } from "../../app/api/fhir/Patient/route";
+import { createPatient, getPatientById, getAllPatients } from "../../fhir/data/repository";
+import { POST, GET as GET_PATIENTS } from "../../app/api/fhir/Patient/route";
 import { GET } from "../../app/api/fhir/Patient/[id]/route";
 
 function makeRequest(body: unknown, contentType = "application/fhir+json") {
@@ -84,5 +85,26 @@ describe("GET /fhir/Patient/:id", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.resourceType).toBe("OperationOutcome");
+  });
+});
+
+describe("GET /fhir/Patient", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 200 with searchset Bundle containing patients", async () => {
+    (getAllPatients as any).mockResolvedValue([
+      {
+        id: "p1",
+        fullName: "Asha Verma",
+        createdAt: "2026-08-08T09:00:00Z",
+      },
+    ]);
+
+    const res = await GET_PATIENTS(new NextRequest("http://localhost/fhir/Patient"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.resourceType).toBe("Bundle");
+    expect(body.type).toBe("searchset");
+    expect(body.total).toBe(1);
   });
 });
