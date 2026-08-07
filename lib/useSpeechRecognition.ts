@@ -36,7 +36,7 @@ export function useSpeechRecognition({
   const audioCtxRef     = useRef<AudioContext | null>(null);
   const mediaStreamRef  = useRef<MediaStream | null>(null);
 
-  // Keep isListeningRef in sync for auto-restart onend loop
+  // Keep isListeningRef in sync
   useEffect(() => {
     isListeningRef.current = isListening;
   }, [isListening]);
@@ -61,10 +61,14 @@ export function useSpeechRecognition({
     setIsListening(false);
   }, []);
 
-  // Start continuous listening with 150Hz High-Pass Audio DSP & Confidence Gate
+  // Start continuous listening with 150Hz High-Pass Audio DSP & Permanent Keep-Alive
   const startListening = useCallback(async () => {
     setNoiseAlert(false);
     if (typeof window === "undefined") return;
+
+    // Set persistent state lock
+    isListeningRef.current = true;
+    setIsListening(true);
 
     // 1. Initialize Web Audio API DSP Filter Node (150Hz High-Pass)
     try {
@@ -99,6 +103,8 @@ export function useSpeechRecognition({
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRec) {
       alert("Speech recognition is not supported in this browser. Please type text manually.");
+      isListeningRef.current = false;
+      setIsListening(false);
       return;
     }
 
@@ -143,24 +149,35 @@ export function useSpeechRecognition({
 
       recognition.onerror = (e: any) => {
         console.warn("Speech recognition error:", e?.error);
+        // Do not turn off isListeningRef on non-fatal errors; allow onend loop to restart
       };
 
-      // AUTO-RESTART LOOP: Keep listening continuously until user manually turns mic off
+      // AGGRESSIVE AUTO-RESTART KEEP-ALIVE LOOP
       recognition.onend = () => {
         if (isListeningRef.current) {
           try {
             recognition.start();
           } catch (err) {
-            console.log("Re-initiating speech recognition loop...");
+            // If instant restart fails due to state transition delay, retry after 100ms
+            setTimeout(() => {
+              if (isListeningRef.current && recognitionRef.current) {
+                try {
+                  recognitionRef.current.start();
+                } catch (e) {
+                  console.log("Speech recognition keep-alive restart retry");
+                }
+              }
+            }, 100);
           }
         }
       };
 
       recognition.start();
-      isListeningRef.current = true;
-      setIsListening(true);
     } catch (e) {
-      stopListening();
+      console.warn("Error starting speech recognition:", e);
+      if (!isListeningRef.current) {
+        stopListening();
+      }
     }
   }, [lang, stopListening, onTranscript, onNoiseDetected]);
 

@@ -809,99 +809,25 @@ function SymptomsStage({
   onAnalyze: (symptoms: string) => void;
   onBack: () => void;
 }) {
-  const [text, setText]           = useState("");
-  const [isListening, setIsListening] = useState(false);
-  const [noiseAlert, setNoiseAlert]   = useState(false);
-  const [loading, setLoading]     = useState(false);
+  const [text, setText]       = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const recognitionRef = useRef<any>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (e) {}
-    }
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-    setIsListening(false);
-  }, []);
-
-  const resetSilenceTimer = useCallback(() => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-    }
-    // 2.5-second debounce timer on silence
-    silenceTimerRef.current = setTimeout(() => {
-      stopListening();
-    }, 2500);
-  }, [stopListening]);
-
-  const startListening = useCallback(() => {
-    setNoiseAlert(false);
-    if (typeof window === "undefined") return;
-
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) {
-      alert("Speech recognition is not supported in this browser. Please type symptoms manually.");
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRec();
-      recognitionRef.current = recognition;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
-
-      resetSilenceTimer();
-
-      recognition.onresult = (event: any) => {
-        resetSilenceTimer();
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const res = event.results[i];
-
-          // PROCESS FINAL RESULTS ONLY TO ELIMINATE INTERIM STUTTER LOOPS
-          if (!res.isFinal) continue;
-
-          const confidence = res[0]?.confidence ?? 1;
-
-          // NOISE FILTER: Reject low-confidence interim noise
-          if (confidence < 0.75 && confidence > 0) {
-            setNoiseAlert(true);
-            continue;
-          }
-
-          const rawTranscript = res[0]?.transcript;
-          if (rawTranscript) {
-            const cleaned = cleanTranscript(rawTranscript);
-            if (cleaned) {
-              setText((prev) => {
-                const combined = prev ? `${prev} ${cleaned}` : cleaned;
-                return cleanTranscript(combined);
-              });
-              setNoiseAlert(false);
-            }
-          }
-        }
-      };
-
-      recognition.onerror = () => {
-        stopListening();
-      };
-
-      recognition.onend = () => {
-        stopListening();
-      };
-
-      recognition.start();
-      setIsListening(true);
-    } catch (e) {
-      stopListening();
-    }
-  }, [lang, stopListening, resetSilenceTimer]);
+  const {
+    isListening,
+    noiseAlert,
+    startListening,
+    stopListening,
+  } = useSpeechRecognition({
+    lang: lang === "hi" ? "hi" : "en",
+    onTranscript: (spokenText) => {
+      if (spokenText) {
+        setText((prev) => {
+          const combined = prev ? `${prev} ${spokenText}` : spokenText;
+          return cleanTranscript(combined);
+        });
+      }
+    },
+  });
 
   const toggleListen = () => {
     if (isListening) {
