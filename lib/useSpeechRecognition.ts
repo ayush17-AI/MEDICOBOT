@@ -38,37 +38,52 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const cleanPhoneDigits = (rawTranscript: string): string => {
+export const processPhoneVoiceInput = (rawTranscript: string): string => {
   if (!rawTranscript) return "";
 
-  // Map word numbers to single digits
-  const digitWords: { [key: string]: string } = {
-    'zero': '0', 'oh': '0', 'nought': '0', 'one': '1', 'won': '1',
-    'two': '2', 'to': '2', 'too': '2', 'three': '3', 'tree': '3',
-    'four': '4', 'for': '4', 'fore': '4', 'five': '5', 'six': '6',
-    'seven': '7', 'eight': '8', 'ate': '8', 'nine': '9', 'nein': '9',
-    'ek': '1', 'do': '2', 'teen': '3', 'chaar': '4', 'paanch': '5',
-    'panch': '5', 'cheh': '6', 'saat': '7', 'aath': '8', 'nau': '9',
-    'शून्य': '0', 'जीरो': '0', 'एक': '1', 'दो': '2', 'तीन': '3',
-    'चार': '4', 'पाँच': '5', 'छह': '6', 'सात': '7', 'आठ': '8', 'नौ': '9'
+  // 1. Convert all spoken Hindi/English words to exact digit string
+  const wordMap: { [key: string]: string } = {
+    'zero': '0', 'oh': '0', 'shunya': '0', 'जीरो': '0', 'शून्य': '0',
+    'one': '1', 'won': '1', 'ek': '1', 'एक': '1',
+    'two': '2', 'to': '2', 'too': '2', 'do': '2', 'दो': '2',
+    'three': '3', 'tree': '3', 'teen': '3', 'तीन': '3',
+    'four': '4', 'for': '4', 'fore': '4', 'chaar': '4', 'चार': '4',
+    'five': '5', 'paanch': '5', 'panch': '5', 'पाँच': '5',
+    'six': '6', 'cheh': '6', 'छह': '6',
+    'seven': '7', 'saat': '7', 'सात': '7',
+    'eight': '8', 'ate': '8', 'aath': '8', 'आठ': '8',
+    'nine': '9', 'nein': '9', 'nau': '9', 'नौ': '9'
   };
 
-  let str = rawTranscript.toLowerCase();
+  let normalized = rawTranscript.toLowerCase();
 
-  Object.keys(digitWords).forEach((word) => {
-    const reg = new RegExp(`\\b${word}\\b`, 'g');
-    str = str.replace(reg, digitWords[word]);
+  // Replace spoken word numbers with digits
+  Object.keys(wordMap).forEach((word) => {
+    const regex = new RegExp(`\\b${word}\\b`, 'g');
+    normalized = normalized.replace(regex, wordMap[word]);
   });
 
-  const digits = str.replace(/\D/g, '');
-  if (digits.length > 10 && digits.startsWith('1')) {
-    return digits.substring(1).slice(0, 10);
+  // 2. Extract ONLY valid digit characters
+  const rawDigits = normalized.replace(/\D/g, '');
+
+  // 3. Fix the "Leading 1" bug caused by WebSpeech API audio initialization sound
+  let cleanDigits = rawDigits;
+
+  // If STT auto-inserted a leading '1' before an Indian mobile number starting with 6, 7, 8, or 9
+  if (cleanDigits.length > 10 && cleanDigits.startsWith('1')) {
+    cleanDigits = cleanDigits.substring(1);
+  } else if (cleanDigits.length === 11 && cleanDigits.startsWith('0')) {
+    // Strip leading zero if 11 digits spoken
+    cleanDigits = cleanDigits.substring(1);
   }
-  return digits.slice(0, 10);
+
+  // 4. Strictly cap at 10 digits
+  return cleanDigits.slice(0, 10);
 };
 
-export const parsePhoneNumber = cleanPhoneDigits;
-export const normalizePhoneNumber = cleanPhoneDigits;
+export const cleanPhoneDigits = processPhoneVoiceInput;
+export const parsePhoneNumber = processPhoneVoiceInput;
+export const normalizePhoneNumber = processPhoneVoiceInput;
 
 export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
   const txt = rawTranscript.toLowerCase().trim();
