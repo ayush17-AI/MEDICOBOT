@@ -19,7 +19,13 @@ import {
   Globe, Calendar, ChevronRight, Stethoscope, Star, Clock, AlertTriangle,
   ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building,
 } from "lucide-react";
-import { useSpeechRecognition, cleanTranscript, normalizePhoneNumber } from "@/lib/useSpeechRecognition";
+import {
+  useSpeechRecognition,
+  cleanTranscript,
+  normalizePhoneNumber,
+  parsePhoneNumber,
+  parseSexInput,
+} from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
    TYPES & DATA MODELS
@@ -712,20 +718,20 @@ function FormStage({
         const digits = cleaned.replace(/\D/g, "");
         setAge(digits || cleaned);
       } else if (targetField === "sex") {
-        const lower = cleaned.toLowerCase();
-        if (lower.includes("female") || lower.includes("महिला") || lower.includes("woman")) {
+        const matchedGender = parseSexInput(spokenText);
+        if (matchedGender === "Female") {
           setSex(t.sexOptions[1] || "Female / महिला");
-        } else if (lower.includes("male") || lower.includes("पुरुष") || lower.includes("man")) {
-          setSex(t.sexOptions[0] || "Male / पुरुष");
-        } else {
+        } else if (matchedGender === "Other") {
           setSex(t.sexOptions[2] || "Other / अन्य");
+        } else {
+          setSex(t.sexOptions[0] || "Male / पुरुष");
         }
       } else if (targetField === "phone") {
-        const preciseDigits = normalizePhoneNumber(spokenText);
-        setPhone(preciseDigits || spokenText.replace(/\D/g, "").slice(0, 10));
+        const preciseDigits = parsePhoneNumber(spokenText);
+        setPhone(preciseDigits);
       } else if (targetField === "emergency") {
-        const preciseDigits = normalizePhoneNumber(spokenText);
-        setEmergency(preciseDigits || spokenText.replace(/\D/g, "").slice(0, 10));
+        const preciseDigits = parsePhoneNumber(spokenText);
+        setEmergency(preciseDigits);
       }
     },
   });

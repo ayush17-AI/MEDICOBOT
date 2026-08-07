@@ -25,52 +25,83 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const normalizePhoneNumber = (transcript: string): string => {
-  if (!transcript) return "";
-  
-  // Convert transcript to lowercase
-  const lowerTranscript = transcript.toLowerCase();
-  
-  // Mapping of common spoken digit variations
-  const numberMap: { [key: string]: string } = {
-    // English
-    'zero': '0', 'oh': '0', 'nought': '0',
-    'one': '1', 'won': '1',
-    'two': '2', 'to': '2', 'too': '2',
-    'three': '3', 'tree': '3',
-    'four': '4', 'for': '4', 'fore': '4',
-    'five': '5',
-    'six': '6',
-    'seven': '7',
-    'eight': '8', 'ate': '8',
-    'nine': '9', 'nein': '9',
-    
-    // Hindi (Phonetic variations in transcript)
-    'शून्य': '0', 'shunya': '0', 'जीरो': '0',
-    'एक': '1', 'ek': '1',
-    'दो': '2', 'do': '2',
-    'तीन': '3', 'teen': '3',
-    'चार': '4', 'chaar': '4',
-    'पाँच': '5', 'panch': '5',
-    'छह': '6', 'cheh': '6',
-    'सात': '7', 'saat': '7',
-    'आठ': '8', 'aath': '8',
-    'नौ': '9', 'nau': '9',
+export const parsePhoneNumber = (rawTranscript: string): string => {
+  if (!rawTranscript) return "";
+
+  // Map word numbers to single digits
+  const wordToDigit: { [key: string]: string } = {
+    'zero': '0', 'oh': '0', 'nought': '0', 'one': '1', 'won': '1',
+    'two': '2', 'to': '2', 'too': '2', 'three': '3', 'tree': '3',
+    'four': '4', 'for': '4', 'fore': '4', 'five': '5', 'six': '6',
+    'seven': '7', 'eight': '8', 'ate': '8', 'nine': '9', 'nein': '9',
+    'ek': '1', 'do': '2', 'teen': '3', 'chaar': '4', 'paanch': '5',
+    'panch': '5', 'cheh': '6', 'saat': '7', 'aath': '8', 'nau': '9',
+    'शून्य': '0', 'जीरो': '0', 'एक': '1', 'दो': '2', 'तीन': '3',
+    'चार': '4', 'पाँच': '5', 'छह': '6', 'सात': '7', 'आठ': '8', 'नौ': '9'
   };
 
-  // Create a regex to match these words as whole words
-  const wordsRegex = new RegExp(Object.keys(numberMap).map(word => `\\b${word}\\b`).join('|'), 'gi');
+  let cleaned = rawTranscript.toLowerCase();
 
-  // Replace words with digits
-  const processedTranscript = lowerTranscript.replace(wordsRegex, (matched) => {
-    return numberMap[matched.toLowerCase()] || matched;
+  // Replace word numbers
+  Object.keys(wordToDigit).forEach((word) => {
+    const reg = new RegExp(`\\b${word}\\b`, 'g');
+    cleaned = cleaned.replace(reg, wordToDigit[word]);
   });
 
-  // Extract all final digit characters (0-9)
-  const finalDigits = processedTranscript.match(/\d/g);
+  // Extract digits ONLY
+  const digits = cleaned.replace(/\D/g, '');
 
-  // Return joined digits, capped at 10 for standard Indian phone numbers
-  return finalDigits ? finalDigits.join('').slice(0, 10) : "";
+  // Strip accidental leading country code '1' if length exceeds 10
+  let finalDigits = digits;
+  if (finalDigits.length > 10 && finalDigits.startsWith('1')) {
+    finalDigits = finalDigits.substring(1);
+  }
+
+  return finalDigits.slice(0, 10);
+};
+
+export const normalizePhoneNumber = parsePhoneNumber;
+
+export const parseSexInput = (rawTranscript: string): "Male" | "Female" | "Other" => {
+  const text = rawTranscript.toLowerCase().trim();
+
+  // Explicit female keywords (check female first so "female" doesn't trigger "male")
+  if (
+    text.includes("female") ||
+    text.includes("woman") ||
+    text.includes("girl") ||
+    text.includes("mahila") ||
+    text.includes("aurat") ||
+    text.includes("महिला") ||
+    text.includes("स्त्री")
+  ) {
+    return "Female";
+  }
+
+  // Explicit male keywords
+  if (
+    text.includes("male") ||
+    text.includes("man") ||
+    text.includes("boy") ||
+    text.includes("purush") ||
+    text.includes("aadmi") ||
+    text.includes("पुरुष")
+  ) {
+    return "Male";
+  }
+
+  // Explicit intersex / trans / other keyword
+  if (
+    text.includes("intersex") ||
+    text.includes("trans") ||
+    text.includes("other") ||
+    text.includes("अन्य")
+  ) {
+    return "Other";
+  }
+
+  // Default fallback if unclear
+  return "Male";
 };
 
 export function useSpeechRecognition({
