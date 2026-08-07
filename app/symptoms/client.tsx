@@ -20,9 +20,6 @@ export default function SymptomsClient() {
   const [vitals, setVitals] = useState<any>(null);
   const [symptoms, setSymptoms] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [triageResult, setTriageResult] = useState<any>(null);
-  const [selectedDoc, setSelectedDoc] = useState<any>(null);
-  const [tokenGenerated, setTokenGenerated] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -43,8 +40,8 @@ export default function SymptomsClient() {
     lang: 'en',
     onTranscript: (spokenText) => {
       if (spokenText) {
-        const cleaned = cleanTranscript(spokenText);
-        setSymptoms((prev) => (prev ? `${prev} ${cleaned}` : cleaned));
+        // Direct assignment without string concatenation loops to fix "Chest Chest pain..." bug
+        setSymptoms(spokenText.trim());
       }
     },
   });
@@ -73,7 +70,9 @@ export default function SymptomsClient() {
         summary: 'Clinical symptom assessment complete based on reported history.',
         possible_conditions: ['Viral Syndrome', 'Upper Respiratory Evaluation'],
       };
-      setTriageResult(triage);
+
+      sessionStorage.setItem('medicobot_symptoms', symptoms.trim());
+      sessionStorage.setItem('medicobot_triage', JSON.stringify(triage));
 
       // Save BOTH Vitals + Symptoms to Supabase patient_records
       const supabase = createClient();
@@ -93,6 +92,9 @@ export default function SymptomsClient() {
           },
         },
       ]);
+
+      // Route directly to Step 3: Doctor Consultation & Specialist Selection Page
+      router.push('/consultation');
     } catch (err) {
       console.warn('Triage API or DB Sync Notice:', err);
       const fallbackTriage = {
@@ -100,16 +102,12 @@ export default function SymptomsClient() {
         summary: 'Symptom assessment logged. Further physical examination advised.',
         possible_conditions: ['General Consultation Required'],
       };
-      setTriageResult(fallbackTriage);
+      sessionStorage.setItem('medicobot_symptoms', symptoms.trim());
+      sessionStorage.setItem('medicobot_triage', JSON.stringify(fallbackTriage));
+      router.push('/consultation');
     } finally {
       setIsAnalyzing(false);
     }
-  };
-
-  const handleBookDoctor = (docName: string) => {
-    const token = `MED-${Math.floor(1000 + Math.random() * 9000)}`;
-    setSelectedDoc(docName);
-    setTokenGenerated(token);
   };
 
   return (
@@ -180,83 +178,6 @@ export default function SymptomsClient() {
             <span>{isAnalyzing ? 'Analyzing Symptoms...' : '🩺 Analyze Symptoms →'}</span>
           </button>
         </div>
-
-        {/* AI Triage & OPD Token Confirmation Screen */}
-        {triageResult && (
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-left animate-fadeIn">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
-                🩺
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
-                  Recommended Department
-                </span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">
-                  {triageResult.department || 'General Physician'}
-                </h3>
-              </div>
-            </div>
-
-            <p className="text-sm font-medium text-slate-700 leading-relaxed">
-              {triageResult.summary || triageResult.clinical_summary}
-            </p>
-
-            {/* Token Generation & Direct Doctor Dashboard Button */}
-            {tokenGenerated ? (
-              <div className="p-6 rounded-3xl bg-emerald-600 text-white shadow-lg space-y-3 text-center">
-                <span className="text-xs font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full inline-block">
-                  OPD Appointment Confirmed!
-                </span>
-                <h2 className="text-3xl font-black">{tokenGenerated}</h2>
-                <p className="text-xs text-emerald-100">
-                  Assigned Doctor: <strong>{selectedDoc}</strong> ({triageResult.department})
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => router.push('/doctor-dashboard')}
-                    data-testid="goto-doctor-dashboard-btn"
-                    className="w-full py-3.5 px-6 rounded-2xl bg-white text-emerald-900 font-black text-sm hover:bg-emerald-50 transition cursor-pointer shadow-md flex items-center justify-center gap-2"
-                  >
-                    <span>Go to Doctor Dashboard →</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Available OPD Specialists for Consultation:
-                </h4>
-                <div className="space-y-2">
-                  {['Dr. Alok Mishra (General Physician)', 'Dr. Kavita Singh (Internal Medicine)'].map((doc) => (
-                    <div
-                      key={doc}
-                      className="p-4 rounded-2xl border border-slate-200 hover:border-teal-500 bg-slate-50/50 flex items-center justify-between gap-2"
-                    >
-                      <span className="text-xs font-bold text-slate-800">{doc}</span>
-                      <button
-                        onClick={() => handleBookDoctor(doc)}
-                        className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-                      >
-                        Book &amp; Generate Token
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => router.push('/doctor-dashboard')}
-                    data-testid="goto-doctor-dashboard-btn"
-                    className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer transition shadow-sm text-center"
-                  >
-                    Go to Doctor Dashboard →
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
