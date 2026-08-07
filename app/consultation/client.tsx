@@ -15,7 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { generateWhatsAppLink } from '@/lib/whatsappHelper';
+import { sanitizePhoneNumber } from '@/lib/whatsappHelper';
 import { RiskService } from '@/src/services/risk.service';
 
 export interface DoctorSpec {
@@ -168,6 +168,34 @@ export default function ConsultationClient() {
     }
   };
 
+  const handleSilentDispatch = async () => {
+    const sanitizedPhone = sanitizePhoneNumber(
+      patient?.phone || patient?.mobile || '',
+      patient?.countryCode || '91'
+    );
+
+    try {
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientName: patient?.name || patient?.fullName || 'Patient',
+          phoneNumber: sanitizedPhone,
+          email: patient?.email || '',
+          appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
+          tokenNumber: tokenGenerated,
+          doctorName: selectedDoctor?.name || 'General Physician',
+        }),
+      });
+
+      if (res.ok) {
+        alert(`✅ Confirmation dispatched silently to ${sanitizedPhone}!`);
+      }
+    } catch (err) {
+      console.error('Silent dispatch error:', err);
+    }
+  };
+
   // Best single matching doctor for AI recommendation
   const recommendedDoctor = DOCTORS_DATABASE.find((d) =>
     d.department.toLowerCase().includes((triage?.department || 'General').toLowerCase())
@@ -288,21 +316,12 @@ export default function ConsultationClient() {
               </p>
             </div>
 
-            <a
-              href={generateWhatsAppLink({
-                patientName: patient?.name || patient?.fullName || 'Patient',
-                phoneNumber: patient?.phone || patient?.mobile || '',
-                countryCode: patient?.countryCode || '91',
-                appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
-                tokenNumber: tokenGenerated,
-                doctorName: selectedDoctor?.name,
-              })}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3"
+            <button
+              onClick={handleSilentDispatch}
+              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3 cursor-pointer"
             >
-              📲 Get Confirmation on WhatsApp
-            </a>
+              📲 Dispatch Confirmation (Silent Backend Process)
+            </button>
 
             {/* Primary Action Button: Unlock & Navigate to Doctor Workstation */}
             <div className="pt-4 flex justify-center">
