@@ -56,6 +56,22 @@ Please arrive 10 mins prior to your schedule. Wish you good health!`;
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMessage)}`;
 }
 
+export function generateDirectSmsUrl(details: {
+  patientName: string;
+  phoneNumber: string;
+  countryCode?: string;
+  appointmentDate: string;
+  tokenNumber?: string;
+  doctorName?: string;
+}): string {
+  const cleanPhone = sanitizeIndianPhone(details.phoneNumber, details.countryCode);
+
+  const textMessage = `MEDICOBOT OPD Confirmation: Hello ${details.patientName}, your appointment is confirmed for ${details.appointmentDate}. Token No: ${details.tokenNumber || '#MED-1150'}. Doctor: ${details.doctorName || 'General Physician'}. Room 204.`;
+
+  // Standard SMS URL scheme
+  return `sms:+${cleanPhone}?body=${encodeURIComponent(textMessage)}`;
+}
+
 export function generateWhatsAppLink(details: WhatsAppDetails): string {
   return generateDirectWhatsAppUrl(details);
 }

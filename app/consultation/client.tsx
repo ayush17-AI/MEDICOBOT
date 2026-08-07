@@ -15,7 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { generateDirectWhatsAppUrl, sanitizeIndianPhone, sanitizePhoneNumber } from '@/lib/whatsappHelper';
+import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber } from '@/lib/whatsappHelper';
 import { RiskService } from '@/src/services/risk.service';
 
 export interface DoctorSpec {
@@ -317,21 +317,39 @@ export default function ConsultationClient() {
               </p>
             </div>
 
-            <a
-              href={generateDirectWhatsAppUrl({
-                patientName: patient?.name || patient?.fullName || 'Patient',
-                phoneNumber: patient?.phone || patient?.mobile || '9461112639',
-                countryCode: patient?.countryCode || '91',
-                appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
-                tokenNumber: tokenGenerated || '#MED-1150',
-                doctorName: selectedDoctor?.name || 'General Physician',
-              })}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3 cursor-pointer"
-            >
-              💬 Send OPD Confirmation via WhatsApp
-            </a>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              {/* WhatsApp Button */}
+              <a
+                href={generateDirectWhatsAppUrl({
+                  patientName: patient?.name || patient?.fullName || 'Patient',
+                  phoneNumber: patient?.phone || patient?.mobile || '9461112639',
+                  countryCode: patient?.countryCode || '91',
+                  appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
+                  tokenNumber: tokenGenerated || '#MED-1150',
+                  doctorName: selectedDoctor?.name || 'General Physician',
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                💬 Send via WhatsApp
+              </a>
+
+              {/* SMS Button */}
+              <a
+                href={generateDirectSmsUrl({
+                  patientName: patient?.name || patient?.fullName || 'Patient',
+                  phoneNumber: patient?.phone || patient?.mobile || '9461112639',
+                  countryCode: patient?.countryCode || '91',
+                  appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
+                  tokenNumber: tokenGenerated || '#MED-1150',
+                  doctorName: selectedDoctor?.name || 'General Physician',
+                })}
+                className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                📱 Send via Text SMS
+              </a>
+            </div>
 
             {/* Primary Action Button: Unlock & Navigate to Doctor Workstation */}
             <div className="pt-4 flex justify-center">
