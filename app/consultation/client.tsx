@@ -15,7 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { sanitizePhoneNumber } from '@/lib/whatsappHelper';
+import { generateDirectWhatsAppUrl, sanitizeIndianPhone, sanitizePhoneNumber } from '@/lib/whatsappHelper';
 import { RiskService } from '@/src/services/risk.service';
 
 export interface DoctorSpec {

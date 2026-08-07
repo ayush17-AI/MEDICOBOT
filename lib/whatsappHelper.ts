@@ -7,33 +7,55 @@ export interface WhatsAppDetails {
   doctorName?: string;
 }
 
-export function sanitizePhoneNumber(phone: string, countryCode: string = '91'): string {
-  // 1. Keep only digits
-  let cleanPhone = phone.replace(/\D/g, '');
-  let cleanCode = countryCode.replace(/\D/g, '') || '91';
+export function sanitizeIndianPhone(phone: string, countryCode: string = '91'): string {
+  // 1. Extract only digits
+  let digits = phone.replace(/\D/g, '');
+  let code = countryCode.replace(/\D/g, '') || '91';
 
-  // 2. If phone starts with the country code (e.g. 919461112639), strip the leading country code from phone
-  if (cleanPhone.startsWith(cleanCode) && cleanPhone.length > 10) {
-    cleanPhone = cleanPhone.slice(cleanCode.length);
+  // 2. Remove duplicate leading country code if present (e.g. 919461112639 -> 9461112639)
+  if (digits.length > 10 && digits.startsWith(code)) {
+    digits = digits.slice(code.length);
   }
 
-  // 3. Return sanitized E.164 number format: +919461112639
-  return `+${cleanCode}${cleanPhone}`;
+  // 3. Take last 10 digits
+  if (digits.length > 10) {
+    digits = digits.slice(-10);
+  }
+
+  // Return clean full phone without spaces or symbols
+  return `${code}${digits}`;
 }
 
-export function generateWhatsAppLink(details: WhatsAppDetails): string {
-  const sanitizedPhone = sanitizePhoneNumber(details.phoneNumber, details.countryCode || '91').replace(/\+/g, '');
+export function sanitizePhoneNumber(phone: string, countryCode: string = '91'): string {
+  const cleanPhone = sanitizeIndianPhone(phone, countryCode);
+  return `+${cleanPhone}`;
+}
 
-  const message = `🏥 *MEDICOBOT OPD Confirmation*
+export function generateDirectWhatsAppUrl(details: {
+  patientName: string;
+  phoneNumber: string;
+  countryCode?: string;
+  appointmentDate: string;
+  tokenNumber?: string;
+  doctorName?: string;
+}): string {
+  const cleanPhone = sanitizeIndianPhone(details.phoneNumber, details.countryCode);
+
+  const textMessage = `🏥 *MEDICOBOT OPD Confirmation*
 
 Hello *${details.patientName}*,
-Your appointment has been successfully scheduled!
+Your appointment registration is successful!
 
 📅 *Date:* ${details.appointmentDate}
 🎫 *Token No:* ${details.tokenNumber || '#MED-1150'}
 👨‍⚕️ *Doctor:* ${details.doctorName || 'General Physician'}
+📍 *Location:* Room 204, OPD Cabinet
 
-Please reach Room 204 on time. Wish you good health!`;
+Please arrive on time. Wish you good health!`;
 
-  return `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMessage)}`;
+}
+
+export function generateWhatsAppLink(details: WhatsAppDetails): string {
+  return generateDirectWhatsAppUrl(details);
 }
