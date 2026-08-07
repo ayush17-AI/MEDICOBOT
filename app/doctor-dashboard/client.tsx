@@ -22,6 +22,7 @@ import {
   Send,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { RiskService } from '@/src/services/risk.service';
 
 export interface PatientRecord {
   id?: string;
@@ -50,6 +51,62 @@ export interface PatientRecord {
       clinical_summary?: string;
       possible_conditions?: string[];
     };
+    risk_evaluation?: {
+      riskScore?: number;
+      category?: string;
+      riskTier?: string;
+      compositeTriageIndex?: number;
+      factors?: any[];
+      riskFactors?: any[];
+    };
+  };
+}
+
+function parseSystolicBP(val: any): number | undefined {
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (typeof val === 'string') {
+    const parts = val.split('/');
+    const first = parseInt(parts[0], 10);
+    if (!isNaN(first)) return first;
+  }
+  return undefined;
+}
+
+function evaluateRecordRisk(rec: PatientRecord): {
+  riskScore: number;
+  category: string;
+  compositeTriageIndex: number;
+  factors: any[];
+} {
+  const evalData = rec.kiosk_data?.risk_evaluation;
+  if (evalData && typeof evalData.riskScore === 'number') {
+    const cat = evalData.category || evalData.riskTier || RiskService.categorize(evalData.riskScore);
+    const comp = typeof evalData.compositeTriageIndex === 'number'
+      ? evalData.compositeTriageIndex
+      : RiskService.computeCompositeTriageIndex(evalData.riskScore, cat as any, rec.created_at || new Date().toISOString());
+    return {
+      riskScore: evalData.riskScore,
+      category: cat,
+      compositeTriageIndex: comp,
+      factors: evalData.factors || evalData.riskFactors || [],
+    };
+  }
+
+  const v = rec.kiosk_data?.vitals;
+  const { riskScore, factors } = RiskService.evaluate({
+    spo2: v?.spo2 ? Number(v.spo2) : undefined,
+    heartRate: v?.heart_rate || (v as any)?.heartRate ? Number(v?.heart_rate || (v as any)?.heartRate) : undefined,
+    systolicBP: parseSystolicBP(v?.blood_pressure || (v as any)?.systolicBP),
+    symptoms: rec.symptoms ? [rec.symptoms] : undefined,
+  });
+  const cat = RiskService.categorize(riskScore);
+  const comp = RiskService.computeCompositeTriageIndex(riskScore, cat, rec.created_at || new Date().toISOString());
+
+  return {
+    riskScore,
+    category: cat,
+    compositeTriageIndex: comp,
+    factors,
   };
 }
 
@@ -79,7 +136,7 @@ const MOCK_RECORDS: PatientRecord[] = [
     created_at: new Date(Date.now() - 3600000).toISOString(),
     patient_name: 'Anjali Verma',
     phone_number: '+91 9123456789',
-    symptoms: 'Extreme chills — critical sensor alert.',
+    symptoms: 'Extreme chills — critical sensor alert, severe shortness of breath.',
     kiosk_data: {
       age: '29',
       sex: 'Female',
@@ -133,6 +190,22 @@ export default function DoctorDashboardClient() {
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
+      // Fetch queue from /api/v1/triage/queue
+      let queueMap = new Map<string, any>();
+      try {
+        const qRes = await fetch('/api/v1/triage/queue');
+        if (qRes.ok) {
+          const qJson = await qRes.json();
+          if (Array.isArray(qJson.queue)) {
+            qJson.queue.forEach((item: any) => {
+              queueMap.set(item.patientId, item);
+            });
+          }
+        }
+      } catch (qErr) {
+        console.warn('Triage queue endpoint notice:', qErr);
+      }
+
       const supabase = createClient();
       const { data, error } = await supabase
         .from('patient_records')
@@ -140,12 +213,46 @@ export default function DoctorDashboardClient() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      const loaded = data && data.length > 0 ? data : MOCK_RECORDS;
-      setRecords(loaded);
-      setSelectedRecord(loaded[0]);
+      const loaded: PatientRecord[] = data && data.length > 0 ? data : MOCK_RECORDS;
+
+      const evaluatedList = loaded.map((rec) => {
+        const queueMatch = queueMap.get(rec.id || rec.phone_number || rec.patient_name);
+        if (queueMatch) {
+          return {
+            ...rec,
+            kiosk_data: {
+              ...rec.kiosk_data,
+              risk_evaluation: {
+                riskScore: queueMatch.riskScore,
+                category: queueMatch.category,
+                riskTier: queueMatch.category,
+                compositeTriageIndex: queueMatch.compositeTriageIndex,
+                factors: queueMatch.factors,
+              },
+            },
+          };
+        }
+        return rec;
+      });
+
+      // Sort by compositeTriageIndex descending (highest priority first)
+      evaluatedList.sort((a, b) => {
+        const riskA = evaluateRecordRisk(a);
+        const riskB = evaluateRecordRisk(b);
+        return riskB.compositeTriageIndex - riskA.compositeTriageIndex;
+      });
+
+      setRecords(evaluatedList);
+      setSelectedRecord((prev) => prev ? (evaluatedList.find(r => r.patient_name === prev.patient_name) || evaluatedList[0]) : evaluatedList[0]);
     } catch {
-      setRecords(MOCK_RECORDS);
-      setSelectedRecord(MOCK_RECORDS[0]);
+      const mockList = [...MOCK_RECORDS];
+      mockList.sort((a, b) => {
+        const riskA = evaluateRecordRisk(a);
+        const riskB = evaluateRecordRisk(b);
+        return riskB.compositeTriageIndex - riskA.compositeTriageIndex;
+      });
+      setRecords(mockList);
+      setSelectedRecord((prev) => prev ? (mockList.find(r => r.patient_name === prev.patient_name) || mockList[0]) : mockList[0]);
     } finally {
       setLoading(false);
     }
@@ -285,20 +392,33 @@ export default function DoctorDashboardClient() {
 
             {/* Horizontal Scroll Queue Pills */}
             <div className="flex items-center gap-2 overflow-x-auto flex-nowrap py-2 max-w-full w-full scrollbar-thin scrollbar-thumb-teal-500 scrollbar-track-slate-100">
-              {filteredRecords.map((r) => (
-                <button
-                  key={r.id || r.patient_name}
-                  onClick={() => setSelectedRecord(r)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                    activeRec.patient_name === r.patient_name
-                      ? 'bg-teal-600 text-white shadow-md ring-2 ring-teal-300'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <span>👤</span>
-                  <span>{r.patient_name}</span>
-                </button>
-              ))}
+              {filteredRecords.map((r) => {
+                const rRisk = evaluateRecordRisk(r);
+                const isCrit = rRisk.compositeTriageIndex === 999.0 || rRisk.category === 'CRITICAL';
+                return (
+                  <button
+                    key={r.id || r.patient_name}
+                    onClick={() => setSelectedRecord(r)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                      activeRec.patient_name === r.patient_name
+                        ? isCrit
+                          ? 'bg-red-600 text-white shadow-md ring-2 ring-red-300'
+                          : 'bg-teal-600 text-white shadow-md ring-2 ring-teal-300'
+                        : isCrit
+                        ? 'bg-red-100 text-red-800 hover:bg-red-200 border border-red-300'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{isCrit ? '🚨' : '👤'}</span>
+                    <span>{r.patient_name}</span>
+                    {isCrit ? (
+                      <span className="px-1.5 py-0.5 rounded bg-red-800 text-white text-[9px] font-black uppercase">CRITICAL OVERRIDE</span>
+                    ) : (
+                      <span className="text-[10px] opacity-80">({rRisk.category})</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -404,14 +524,28 @@ export default function DoctorDashboardClient() {
 
           {/* Column 3: AI Clinical Triage & Differential Assessment */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
               <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
                 <ShieldCheck size={16} className="text-teal-600" />
                 <span>AI Clinical Triage</span>
               </h3>
-              <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-black">
-                {activeRec.kiosk_data?.triage?.department || 'General Physician'}
-              </span>
+              {(() => {
+                const activeRisk = evaluateRecordRisk(activeRec);
+                const isCrit = activeRisk.compositeTriageIndex === 999.0 || activeRisk.category === 'CRITICAL';
+                return isCrit ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider animate-pulse">
+                    🚨 CRITICAL OVERRIDE
+                  </span>
+                ) : (
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                    activeRisk.category === 'HIGH' ? 'bg-amber-100 text-amber-800' :
+                    activeRisk.category === 'MODERATE' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {activeRisk.category} RISK ({activeRisk.riskScore}/100)
+                  </span>
+                );
+              })()}
             </div>
 
             <div className="space-y-3 text-xs">
@@ -425,17 +559,33 @@ export default function DoctorDashboardClient() {
               </div>
 
               <div>
-                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
-                  Possible Conditions Evaluated
-                </span>
-                <div className="space-y-1.5">
-                  {(activeRec.kiosk_data?.triage?.possible_conditions || ['General Consultation Required', 'Routine Evaluation']).map((cond, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs font-semibold text-slate-800">
-                      <div className="w-2 h-2 rounded-full bg-teal-500" />
-                      <span>{cond}</span>
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  const activeRisk = evaluateRecordRisk(activeRec);
+                  return (
+                    <>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                        Risk Factors &amp; Priority Index ({activeRisk.compositeTriageIndex === 999.0 ? '999.0 Emergency Override' : `${activeRisk.compositeTriageIndex.toFixed(1)} pts`})
+                      </span>
+                      <div className="space-y-1.5">
+                        {activeRisk.factors && activeRisk.factors.length > 0 ? (
+                          activeRisk.factors.map((f: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs font-semibold text-slate-800">
+                              <div className="w-2 h-2 rounded-full bg-amber-500" />
+                              <span><strong>[{f.parameter}] (+{f.impact} pts)</strong> {f.reason}</span>
+                            </div>
+                          ))
+                        ) : (
+                          (activeRec.kiosk_data?.triage?.possible_conditions || ['General Consultation Required', 'Routine Evaluation']).map((cond, idx) => (
+                            <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs font-semibold text-slate-800">
+                              <div className="w-2 h-2 rounded-full bg-teal-500" />
+                              <span>{cond}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

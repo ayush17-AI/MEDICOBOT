@@ -15,6 +15,8 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { generateWhatsAppLink } from '@/lib/whatsappHelper';
+import { RiskService } from '@/src/services/risk.service';
 
 export interface DoctorSpec {
   id: string;
@@ -71,6 +73,7 @@ export default function ConsultationClient() {
   const [vitals, setVitals] = useState<any>(null);
   const [symptoms, setSymptoms] = useState('');
   const [triage, setTriage] = useState<any>(null);
+  const [riskEvaluation, setRiskEvaluation] = useState<any>(null);
 
   // Flow State: 'none' (Initial 2 Choice Cards), 'ai' (AI Recommended Doctor), 'manual' (All OPD Doctors)
   const [selectionMode, setSelectionMode] = useState<'none' | 'ai' | 'manual'>('none');
@@ -84,15 +87,51 @@ export default function ConsultationClient() {
       const v = sessionStorage.getItem('medicobot_vitals');
       const s = sessionStorage.getItem('medicobot_symptoms');
       const t = sessionStorage.getItem('medicobot_triage');
+      const r = sessionStorage.getItem('medicobot_risk_evaluation');
 
       if (p) setPatient(JSON.parse(p));
       if (v) setVitals(JSON.parse(v));
       if (s) setSymptoms(s);
       if (t) setTriage(JSON.parse(t));
+      if (r) setRiskEvaluation(JSON.parse(r));
     } catch (e) {
       console.warn('Session load notice:', e);
     }
   }, []);
+
+  const activeRisk = React.useMemo(() => {
+    if (riskEvaluation) return riskEvaluation;
+    if (!vitals && !symptoms) return null;
+
+    const parseSystolicBP = (val: any): number | undefined => {
+      if (typeof val === 'number' && Number.isFinite(val)) return val;
+      if (typeof val === 'string') {
+        const parts = val.split('/');
+        const first = parseInt(parts[0], 10);
+        if (!isNaN(first)) return first;
+      }
+      return undefined;
+    };
+
+    const evalResult = RiskService.evaluate({
+      spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
+      heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
+      systolicBP: parseSystolicBP(vitals?.blood_pressure || vitals?.bloodPressure || vitals?.systolicBP),
+      symptoms: symptoms ? [symptoms] : undefined,
+    });
+
+    const category = RiskService.categorize(evalResult.riskScore);
+    const compositeTriageIndex = RiskService.computeCompositeTriageIndex(evalResult.riskScore, category, new Date().toISOString());
+
+    return {
+      riskScore: evalResult.riskScore,
+      category,
+      riskTier: category,
+      compositeTriageIndex,
+      factors: evalResult.factors,
+      riskFactors: evalResult.factors,
+    };
+  }, [riskEvaluation, vitals, symptoms]);
 
   const handleBookToken = async (doc: DoctorSpec) => {
     setIsBooking(true);
@@ -115,6 +154,7 @@ export default function ConsultationClient() {
             ...patient,
             vitals: vitals || {},
             triage: triage || { department: doc.department, summary: 'Specialist consultation booked.' },
+            risk_evaluation: activeRisk,
             doctor: doc.name,
             tokenNum,
             submitted_at: new Date().toISOString(),
@@ -180,6 +220,54 @@ export default function ConsultationClient() {
           <p className="text-xs sm:text-sm font-medium text-slate-700 leading-relaxed">
             {triage?.summary || triage?.clinical_summary || 'Based on your reported symptoms and recorded vitals, AI recommends consultation with a General Physician / Specialist today.'}
           </p>
+
+          {/* AI Clinical Risk & Priority Triage Badge */}
+          {activeRisk && (
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-black uppercase text-slate-500 tracking-wider">
+                  Clinical Risk &amp; Priority Triage:
+                </span>
+                {activeRisk.compositeTriageIndex === 999.0 || activeRisk.riskScore >= 76 || activeRisk.category === 'CRITICAL' || activeRisk.riskTier === 'CRITICAL' ? (
+                  <span className="px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-red-600 text-white shadow-sm flex items-center gap-1.5">
+                    <span>🚨 CRITICAL RISK — Emergency Priority</span>
+                  </span>
+                ) : activeRisk.riskScore >= 50 || activeRisk.category === 'HIGH' || activeRisk.riskTier === 'HIGH' ? (
+                  <span className="px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500 text-white shadow-sm flex items-center gap-1.5">
+                    <span>⚠️ HIGH CLINICAL RISK</span>
+                  </span>
+                ) : activeRisk.riskScore >= 25 || activeRisk.category === 'MODERATE' || activeRisk.riskTier === 'MODERATE' ? (
+                  <span className="px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-yellow-400 text-slate-900 shadow-sm flex items-center gap-1.5">
+                    <span>⚡ MODERATE RISK</span>
+                  </span>
+                ) : (
+                  <span className="px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-600 text-white shadow-sm flex items-center gap-1.5">
+                    <span>✅ LOW RISK — Routine OPD</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                <div className="flex items-center justify-between text-slate-700 font-bold flex-wrap gap-2">
+                  <span>Risk Score: <strong className="text-slate-900">{activeRisk.riskScore}/100</strong></span>
+                  <span>Composite Priority Index: <strong className="text-teal-700">{activeRisk.compositeTriageIndex === 999.0 ? '999.0 (Emergency Override)' : typeof activeRisk.compositeTriageIndex === 'number' ? activeRisk.compositeTriageIndex.toFixed(1) : activeRisk.compositeTriageIndex}</strong></span>
+                </div>
+                {(activeRisk.factors || activeRisk.riskFactors) && (activeRisk.factors || activeRisk.riskFactors).length > 0 ? (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] font-black uppercase text-slate-400 block">Identified Clinical Risk Factors:</span>
+                    {(activeRisk.factors || activeRisk.riskFactors).map((f: any, idx: number) => (
+                      <div key={idx} className="flex items-start gap-1.5 text-[11px] font-semibold text-slate-800">
+                        <span className="text-amber-600">•</span>
+                        <span><strong>[{f.parameter}] (+{f.impact} pts)</strong> {f.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] font-medium text-slate-500 italic">No elevated clinical risk factors identified in recorded vitals or symptoms.</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SCREEN 1: SUCCESS CONFIRMATION SCREEN (When Token Generated) */}
@@ -199,6 +287,22 @@ export default function ConsultationClient() {
                 {selectedDoctor?.department} &bull; {selectedDoctor?.availability}
               </p>
             </div>
+
+            <a
+              href={generateWhatsAppLink({
+                patientName: patient?.name || patient?.fullName || 'Patient',
+                phoneNumber: patient?.phone || patient?.mobile || '',
+                countryCode: patient?.countryCode || '91',
+                appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
+                tokenNumber: tokenGenerated,
+                doctorName: selectedDoctor?.name,
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mb-3"
+            >
+              📲 Get Confirmation on WhatsApp
+            </a>
 
             {/* Primary Action Button: Unlock & Navigate to Doctor Workstation */}
             <div className="pt-4 flex justify-center">

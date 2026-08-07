@@ -13,6 +13,17 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { useSpeechRecognition, cleanTranscript } from '@/lib/useSpeechRecognition';
+import { RiskService } from '@/src/services/risk.service';
+
+function parseSystolicBP(val: any): number | undefined {
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (typeof val === 'string') {
+    const parts = val.split('/');
+    const first = parseInt(parts[0], 10);
+    if (!isNaN(first)) return first;
+  }
+  return undefined;
+}
 
 export default function SymptomsClient() {
   const router = useRouter();
@@ -71,10 +82,56 @@ export default function SymptomsClient() {
         possible_conditions: ['Viral Syndrome', 'Upper Respiratory Evaluation'],
       };
 
+      // Call Bounty 4 Risk Engine /api/v1/risk/evaluate
+      let riskResult: any = null;
+      try {
+        const patientId = patient?.id || patient?.phone || patient?.name || `pt_${Date.now()}`;
+        const riskRes = await fetch('/api/v1/risk/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patientId,
+            vitals: {
+              spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
+              heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
+              systolicBP: parseSystolicBP(vitals?.blood_pressure || vitals?.bloodPressure || vitals?.systolicBP),
+              symptoms: [symptoms.trim()],
+            },
+          }),
+        });
+        if (riskRes.ok) {
+          riskResult = await riskRes.json();
+        }
+      } catch (rErr) {
+        console.warn('Risk evaluation API notice:', rErr);
+      }
+
+      if (!riskResult) {
+        const evaluated = RiskService.evaluate({
+          spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
+          heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
+          systolicBP: parseSystolicBP(vitals?.blood_pressure || vitals?.bloodPressure || vitals?.systolicBP),
+          symptoms: [symptoms.trim()],
+        });
+        const cat = RiskService.categorize(evaluated.riskScore);
+        const comp = RiskService.computeCompositeTriageIndex(evaluated.riskScore, cat, new Date().toISOString());
+        riskResult = {
+          patientId: patient?.id || patient?.phone || patient?.name || `pt_${Date.now()}`,
+          riskScore: evaluated.riskScore,
+          category: cat,
+          riskTier: cat,
+          compositeTriageIndex: comp,
+          factors: evaluated.factors,
+          riskFactors: evaluated.factors,
+          evaluatedAt: new Date().toISOString(),
+        };
+      }
+
       sessionStorage.setItem('medicobot_symptoms', symptoms.trim());
       sessionStorage.setItem('medicobot_triage', JSON.stringify(triage));
+      sessionStorage.setItem('medicobot_risk_evaluation', JSON.stringify(riskResult));
 
-      // Save BOTH Vitals + Symptoms to Supabase patient_records
+      // Save Vitals + Symptoms + Risk Evaluation to Supabase patient_records
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -88,6 +145,7 @@ export default function SymptomsClient() {
             ...patient,
             vitals: vitals || {},
             triage,
+            risk_evaluation: riskResult,
             submitted_at: new Date().toISOString(),
           },
         },
