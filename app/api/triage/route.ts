@@ -1,108 +1,186 @@
-import { NextResponse } from 'next/server';
-import Groq from 'groq-sdk';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import OpenAI from 'openai';
+import { NextRequest, NextResponse } from "next/server";
+import type { Department, Severity, TriageResult } from "@/lib/types";
 
-export async function POST(req: Request) {
-  try {
-    const { prompt } = await req.json();
+export const runtime = "nodejs";
 
-    if (!prompt) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
-    }
+const VALID_DEPARTMENTS: Department[] = [
+  "Cardiology",
+  "Gastroenterology",
+  "General Physician",
+  "Neurology",
+  "Orthopedics",
+];
+const VALID_SEVERITIES: Severity[] = ["Red", "Yellow", "Green"];
 
-    // SYSTEM INSTRUCTION FOR MEDICAL TRIAGE
-    const systemPrompt = `You are MEDICOBOT AI Triage Engine. Analyze patient symptoms and output JSON with:
-1. "department": Recommended hospital specialty department (e.g., Cardiology, Neurology, Orthopedics, General Physician, ENT, Pediatrics).
-2. "severity": "Red" | "Yellow" | "Green".
-3. "summary": A brief 1-line summary of patient condition.
+interface TriageRequestBody {
+  symptomText: string;
+  age?: string;
+  sex?: string;
+  lang?: "en" | "hi";
+}
 
-Patient Input: ${prompt}`;
+const SYSTEM_PROMPT = `You are a clinical triage assistant at a hospital OPD intake kiosk.
 
-    // 1. TRY GROQ API (PRIMARY ENGINE)
-    if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'gsk_your_groq_api_key_here') {
-      try {
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const completion = await groq.chat.completions.create({
-          messages: [
-            { role: 'system', content: 'You are a precise medical triage AI. Return responses in valid JSON format.' },
-            { role: 'user', content: systemPrompt }
-          ],
-          model: 'llama-3.3-70b-versatile',
-          response_format: { type: 'json_object' }
-        });
+STRICT RULES:
+- Do NOT hand down a premature single-disease diagnosis.
+- Perform a mandatory differential analysis: evaluate the reported symptoms across multiple plausible underlying causes before assigning a department (for example, chest pain should be weighed across gastrointestinal/reflux, musculoskeletal/injury, anxiety, respiratory, and cardiac risk).
+- Assign exactly one routing department from this fixed list: ${VALID_DEPARTMENTS.join(", ")}.
+- Assign exactly one severity from this fixed list: Red (Emergency), Yellow (Urgent), Green (Standard).
+- If symptoms suggest possible life-threatening risk (e.g. crushing chest pain, difficulty breathing, stroke signs), err toward Red.
+- Respond with ONLY a single JSON object, no prose before or after it, in exactly this shape:
+{
+  "department": "<one of: ${VALID_DEPARTMENTS.join(" | ")}>",
+  "severity": "<Red | Yellow | Green>",
+  "differential_factors": ["<3-5 short possible underlying causes considered>"],
+  "clinical_reasoning": "<2-sentence explanation of why this department and severity were assigned, based on the differential analysis>"
+}`;
 
-        const result = completion.choices[0]?.message?.content;
-        if (result) {
-          return NextResponse.json({ 
-            data: JSON.parse(result), 
-            provider: 'Groq Cloud (Primary)' 
-          });
-        }
-      } catch (err) {
-        console.warn("Groq API failed. Switching to Gemini Fallback...", err);
-      }
-    }
+function buildUserPrompt(body: TriageRequestBody): string {
+  return `Patient age: ${body.age ?? "unknown"}
+Patient sex: ${body.sex ?? "unknown"}
+Reported symptoms (patient's own words, possibly transcribed via voice, language=${body.lang ?? "en"}):
+"${body.symptomText}"
 
-    // 2. TRY GEMINI API (SECONDARY FALLBACK)
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'AIzaSy_your_gemini_api_key_here') {
-      try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ 
-          model: 'gemini-1.5-flash',
-          generationConfig: { responseMimeType: "application/json" }
-        });
-        
-        const result = await model.generateContent(systemPrompt);
-        const textResponse = result.response.text();
-        
-        if (textResponse) {
-          return NextResponse.json({ 
-            data: JSON.parse(textResponse), 
-            provider: 'Google Gemini (Fallback 1)' 
-          });
-        }
-      } catch (err) {
-        console.warn("Gemini API failed. Switching to OpenAI Fallback...", err);
-      }
-    }
+Return the JSON triage object now.`;
+}
 
-    // 3. TRY OPENAI API (FINAL FALLBACK)
-    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-proj-your_openai_api_key_here') {
-      try {
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const response = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are a precise medical triage AI. Return valid JSON.' },
-            { role: 'user', content: systemPrompt }
-          ],
-          response_format: { type: 'json_object' }
-        });
+function extractJson(raw: string): unknown {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1) throw new Error("No JSON object found in model output");
+  return JSON.parse(raw.slice(start, end + 1));
+}
 
-        const result = response.choices[0]?.message?.content;
-        if (result) {
-          return NextResponse.json({ 
-            data: JSON.parse(result), 
-            provider: 'OpenAI (Fallback 2)' 
-          });
-        }
-      } catch (err) {
-        console.error("OpenAI API failed.", err);
-      }
-    }
+function coerceResult(parsed: unknown): Omit<TriageResult, "provider"> {
+  const p = parsed as Record<string, unknown>;
+  const department = VALID_DEPARTMENTS.includes(p.department as Department)
+    ? (p.department as Department)
+    : "General Physician";
+  const severity = VALID_SEVERITIES.includes(p.severity as Severity) ? (p.severity as Severity) : "Yellow";
+  const differential_factors = Array.isArray(p.differential_factors)
+    ? (p.differential_factors as unknown[]).map(String).slice(0, 6)
+    : [];
+  const clinical_reasoning =
+    typeof p.clinical_reasoning === "string" ? p.clinical_reasoning : "Assessment generated from reported symptoms.";
+  return { department, severity, differential_factors, clinical_reasoning };
+}
 
-    // 4. MOCK FALLBACK (If all APIs fail or keys are unconfigured)
-    return NextResponse.json({
-      data: {
-        department: "General Physician",
-        severity: "Yellow",
-        summary: "Symptom analysis completed via offline safety backup."
-      },
-      provider: "Mock Safe Mode (Offline Backup)"
-    });
+/* ---------------------------- Provider calls ---------------------------- */
 
-  } catch (globalError) {
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+async function tryGroq(userPrompt: string): Promise<Omit<TriageResult, "provider">> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY not set");
+  const { default: Groq } = await import("groq-sdk");
+  const client = new Groq({ apiKey });
+  const completion = await client.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+  });
+  const raw = completion.choices[0]?.message?.content ?? "";
+  return coerceResult(extractJson(raw));
+}
+
+async function tryGemini(userPrompt: string): Promise<Omit<TriageResult, "provider">> {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) throw new Error("GOOGLE_API_KEY not set");
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    systemInstruction: SYSTEM_PROMPT,
+  });
+  const result = await model.generateContent(userPrompt);
+  const raw = result.response.text();
+  return coerceResult(extractJson(raw));
+}
+
+async function tryOpenAI(userPrompt: string): Promise<Omit<TriageResult, "provider">> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY not set");
+  const { default: OpenAI } = await import("openai");
+  const client = new OpenAI({ apiKey });
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+  });
+  const raw = completion.choices[0]?.message?.content ?? "";
+  return coerceResult(extractJson(raw));
+}
+
+function offlineMock(body: TriageRequestBody): Omit<TriageResult, "provider"> {
+  const text = body.symptomText.toLowerCase();
+  if (/chest|breath|heart/.test(text)) {
+    return {
+      department: "Cardiology",
+      severity: "Yellow",
+      differential_factors: [
+        "Gastrointestinal acid reflux / heartburn",
+        "Musculoskeletal strain / chest wall discomfort",
+        "Anxiety-related chest tightness",
+        "Cardiac risk evaluation required",
+      ],
+      clinical_reasoning:
+        "Chest-related symptoms carry a range of plausible causes from reflux to musculoskeletal strain, but cardiac risk cannot be excluded without evaluation, so routing to Cardiology with Yellow urgency is the safest default while AI providers are unavailable.",
+    };
   }
+  if (/stomach|abdomen|nausea|vomit/.test(text)) {
+    return {
+      department: "Gastroenterology",
+      severity: "Green",
+      differential_factors: ["Gastritis / indigestion", "Food intolerance", "Mild infection"],
+      clinical_reasoning:
+        "Reported abdominal symptoms most commonly stem from digestive causes without acute red-flag features, so a standard Gastroenterology consult is appropriate. This is an offline fallback estimate, not a live model assessment.",
+    };
+  }
+  return {
+    department: "General Physician",
+    severity: "Green",
+    differential_factors: ["Common viral illness", "Fatigue / lifestyle factors", "Requires in-person evaluation"],
+    clinical_reasoning:
+      "Symptoms described do not clearly map to a specialty department, so General Physician triage with standard priority is the safest default. This is an offline fallback estimate, not a live model assessment.",
+  };
+}
+
+export async function POST(req: NextRequest) {
+  let body: TriageRequestBody;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+  if (!body.symptomText || !body.symptomText.trim()) {
+    return NextResponse.json({ error: "symptomText is required" }, { status: 400 });
+  }
+
+  const userPrompt = buildUserPrompt(body);
+
+  const providers: { name: TriageResult["provider"]; run: () => Promise<Omit<TriageResult, "provider">> }[] = [
+    { name: "groq", run: () => tryGroq(userPrompt) },
+    { name: "gemini", run: () => tryGemini(userPrompt) },
+    { name: "openai", run: () => tryOpenAI(userPrompt) },
+  ];
+
+  for (const provider of providers) {
+    try {
+      const result = await provider.run();
+      return NextResponse.json({ ...result, provider: provider.name } satisfies TriageResult);
+    } catch (err) {
+      console.error(`[triage] ${provider.name} failed:`, err instanceof Error ? err.message : err);
+      // fall through to next provider
+    }
+  }
+
+  // All live providers unavailable or failed — safe offline fallback.
+  const mock = offlineMock(body);
+  return NextResponse.json({ ...mock, provider: "offline-mock" } satisfies TriageResult);
 }
