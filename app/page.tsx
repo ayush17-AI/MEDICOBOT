@@ -38,6 +38,7 @@ import {
   startProductionVoiceCapture,
   blobToBase64,
   cleanDigitsOnly,
+  extractDigitsStrict,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -768,6 +769,9 @@ function FormStage({
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         let success = false;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+
         try {
           const audioBase64 = await blobToBase64(audioBlob);
           const res = await fetch('/api/whisper', {
@@ -776,12 +780,14 @@ function FormStage({
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ audioBase64 }),
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
 
           if (res.ok) {
             const data = await res.json();
             if (data.text) {
-              const parsedNumber = cleanDigitsOnly(data.text);
+              const parsedNumber = extractDigitsStrict(data.text);
               if (field === "phone") {
                 setPhone(parsedNumber);
               } else {
@@ -791,14 +797,15 @@ function FormStage({
             }
           }
         } catch (err) {
-          console.error('Groq Whisper Base64 Transcription Failed:', err);
+          clearTimeout(timeoutId);
+          console.error('Groq Whisper Base64 Transcription Failed or Timed Out:', err);
         }
 
         if (!success) {
-          console.warn('Groq Whisper failed or empty, fallback to client-side voice capture');
+          console.warn('Groq Whisper failed or timed out, instant hard fallback to browser STT');
           startProductionVoiceCapture(
             (spokenText) => {
-              const digits = cleanDigitsOnly(spokenText);
+              const digits = extractDigitsStrict(spokenText);
               if (field === "phone") setPhone(digits);
               else setEmergency(digits);
             },

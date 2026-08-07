@@ -110,6 +110,7 @@ export const cleanPhoneDigits = parsePhoneDigitsStrict;
 export const parsePhoneNumber = parsePhoneDigitsStrict;
 export const normalizePhoneNumber = parsePhoneDigitsStrict;
 export const extractCleanPhoneDigits = parsePhoneDigitsStrict;
+export const extractDigitsStrict = parsePhoneDigitsStrict;
 
 export const startProductionVoiceCapture = async (
   onResult: (text: string) => void,
