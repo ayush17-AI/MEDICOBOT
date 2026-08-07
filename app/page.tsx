@@ -29,6 +29,7 @@ import {
   cleanGenderInput,
   stopVoiceSession,
   processPhoneVoiceInput,
+  sanitizePhoneDigits,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -731,10 +732,10 @@ function FormStage({
           setSex(t.sexOptions[0] || "Male / पुरुष");
         }
       } else if (targetField === "phone") {
-        const preciseDigits = processPhoneVoiceInput(spokenText);
+        const preciseDigits = sanitizePhoneDigits(spokenText);
         setPhone(preciseDigits);
       } else if (targetField === "emergency") {
-        const preciseDigits = processPhoneVoiceInput(spokenText);
+        const preciseDigits = sanitizePhoneDigits(spokenText);
         setEmergency(preciseDigits);
       }
     },

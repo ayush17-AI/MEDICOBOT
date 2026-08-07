@@ -38,10 +38,9 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const processPhoneVoiceInput = (rawTranscript: string): string => {
-  if (!rawTranscript) return "";
+export const sanitizePhoneDigits = (rawSpeech: string): string => {
+  if (!rawSpeech) return "";
 
-  // 1. Convert all spoken Hindi/English words to exact digit string
   const wordMap: { [key: string]: string } = {
     'zero': '0', 'oh': '0', 'shunya': '0', 'जीरो': '0', 'शून्य': '0',
     'one': '1', 'won': '1', 'ek': '1', 'एक': '1',
@@ -55,35 +54,31 @@ export const processPhoneVoiceInput = (rawTranscript: string): string => {
     'nine': '9', 'nein': '9', 'nau': '9', 'नौ': '9'
   };
 
-  let normalized = rawTranscript.toLowerCase();
+  let str = rawSpeech.toLowerCase();
 
-  // Replace spoken word numbers with digits
+  // Replace spoken word digits
   Object.keys(wordMap).forEach((word) => {
     const regex = new RegExp(`\\b${word}\\b`, 'g');
-    normalized = normalized.replace(regex, wordMap[word]);
+    str = str.replace(regex, wordMap[word]);
   });
 
-  // 2. Extract ONLY valid digit characters
-  const rawDigits = normalized.replace(/\D/g, '');
+  // Keep ONLY numeric digits
+  let digitsOnly = str.replace(/\D/g, '');
 
-  // 3. Fix the "Leading 1" bug caused by WebSpeech API audio initialization sound
-  let cleanDigits = rawDigits;
-
-  // If STT auto-inserted a leading '1' before an Indian mobile number starting with 6, 7, 8, or 9
-  if (cleanDigits.length > 10 && cleanDigits.startsWith('1')) {
-    cleanDigits = cleanDigits.substring(1);
-  } else if (cleanDigits.length === 11 && cleanDigits.startsWith('0')) {
-    // Strip leading zero if 11 digits spoken
-    cleanDigits = cleanDigits.substring(1);
+  // Strip ghost leading '1' or '0' if digits exceed 10 or start incorrectly
+  if (digitsOnly.length > 10 && digitsOnly.startsWith('1')) {
+    digitsOnly = digitsOnly.substring(1);
+  } else if (digitsOnly.length === 11 && digitsOnly.startsWith('0')) {
+    digitsOnly = digitsOnly.substring(1);
   }
 
-  // 4. Strictly cap at 10 digits
-  return cleanDigits.slice(0, 10);
+  return digitsOnly.slice(0, 10);
 };
 
-export const cleanPhoneDigits = processPhoneVoiceInput;
-export const parsePhoneNumber = processPhoneVoiceInput;
-export const normalizePhoneNumber = processPhoneVoiceInput;
+export const processPhoneVoiceInput = sanitizePhoneDigits;
+export const cleanPhoneDigits = sanitizePhoneDigits;
+export const parsePhoneNumber = sanitizePhoneDigits;
+export const normalizePhoneNumber = sanitizePhoneDigits;
 
 export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
   const txt = rawTranscript.toLowerCase().trim();
@@ -223,7 +218,7 @@ export function useSpeechRecognition({
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
       recognition.onresult = (event: any) => {
-        let fullTranscript = "";
+        let currentCombined = "";
         for (let i = 0; i < event.results.length; i++) {
           const res = event.results[i];
           const confidence = res[0]?.confidence ?? 1;
@@ -237,19 +232,16 @@ export function useSpeechRecognition({
 
           const raw = res[0]?.transcript;
           if (raw) {
-            fullTranscript += raw + " ";
+            currentCombined += raw + " ";
           }
         }
 
-        if (fullTranscript) {
-          const cleaned = cleanTranscript(fullTranscript);
+        if (currentCombined) {
+          const cleaned = cleanTranscript(currentCombined);
           if (cleaned) {
-            setTranscript((prev) => {
-              const combined = prev ? `${prev} ${cleaned}` : cleaned;
-              const normalized = cleanTranscript(combined);
-              if (onTranscript) onTranscript(normalized);
-              return normalized;
-            });
+            // SET CLEANED RESULT DIRECTLY (PREVENTS INTERIM SELF-CONCATENATION LOOPS)
+            setTranscript(cleaned);
+            if (onTranscript) onTranscript(cleaned);
             setNoiseAlert(false);
           }
         }
