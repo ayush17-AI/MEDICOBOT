@@ -17,8 +17,9 @@ import {
 import {
   Mic, MicOff, ArrowRight, ArrowLeft, RotateCcw, Phone, User, Heart,
   Globe, Calendar, ChevronRight, Stethoscope, Star, Clock, AlertTriangle,
-  ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle,
+  ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building,
 } from "lucide-react";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
    TYPES & DATA MODELS
@@ -1460,7 +1461,43 @@ function DoctorDashboardStage({
 }) {
   const [called, setCalled] = useState(false);
   const [rxNotes, setRxNotes] = useState("");
+  const [pharmacyOption, setPharmacyOption] = useState<"YES" | "NO">("YES");
   const [completed, setCompleted] = useState(false);
+  const [dispatchStatus, setDispatchStatus] = useState<{ patientAlert?: string; pharmacyAlert?: string } | null>(null);
+
+  const {
+    isListening: isDictating,
+    startListening: startDictation,
+    stopListening: stopDictation,
+  } = useSpeechRecognition({
+    lang: lang === "hi" ? "hi" : "en",
+    onTranscript: (spokenText) => {
+      if (spokenText) {
+        setRxNotes((prev) => (prev ? `${prev} ${spokenText}` : spokenText));
+      }
+    },
+  });
+
+  const toggleDictation = () => {
+    if (isDictating) {
+      stopDictation();
+    } else {
+      startDictation();
+    }
+  };
+
+  const handleSaveAndSend = () => {
+    const phoneNum = patient.phone || "+91 98765 43210";
+    const patientMsg = `📲 Rx Sent to Patient's Mobile (${phoneNum}): [Prescription & Token #${tokenNum} delivered via WhatsApp]`;
+
+    if (pharmacyOption === "YES") {
+      const pharmacyMsg = `🏥 Hospital Pharmacy Dispensing Desk Notified! Order #RX-${tokenNum.replace("MED-", "")} routed to Ground Floor Pharmacy Counter.`;
+      setDispatchStatus({ patientAlert: patientMsg, pharmacyAlert: pharmacyMsg });
+    } else {
+      setDispatchStatus({ patientAlert: `📲 Rx Sent to Patient's Mobile (${phoneNum}). Local Pharmacy fulfillment selected.` });
+    }
+    setCompleted(true);
+  };
 
   return (
     <motion.div
@@ -1589,35 +1626,113 @@ function DoctorDashboardStage({
 
             <div className="flex flex-col gap-3">
               <button
+                type="button"
                 onClick={() => setCalled(true)}
                 disabled={called}
-                className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-75 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow cursor-pointer"
+                className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-75 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
               >
                 <span>{called ? "📢 Patient Called to Room 204" : "📢 Call Patient to Room 204"}</span>
               </button>
 
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                  Clinical Notes &amp; Digital Prescription (Rx)
-                </label>
+              {/* Dictation Header & Field */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Clinical Notes &amp; Digital Prescription (Rx)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={toggleDictation}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                      isDictating
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-teal-100 hover:bg-teal-200 text-teal-800 border border-teal-200"
+                    }`}
+                  >
+                    <Mic size={14} />
+                    <span>{isDictating ? "⏹️ Stop Dictation (Listening...)" : "🎙️ Dictate Prescription (Voice-to-Rx)"}</span>
+                  </button>
+                </div>
                 <textarea
                   rows={3}
                   value={rxNotes}
                   onChange={(e) => setRxNotes(e.target.value)}
-                  placeholder="Enter clinical observations, diagnosis, prescribed medicines..."
+                  placeholder="Enter or dictate clinical observations, diagnosis, prescribed medicines..."
                   className="w-full p-3.5 rounded-2xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-400 text-xs text-slate-800 placeholder:text-slate-400 resize-none shadow-xs"
                 />
               </div>
 
-              <div className="flex gap-2">
+              {/* Hospital Pharmacy Fulfillment Toggle */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="text-[11px] font-bold text-slate-700 block">
+                  {lang === "hi"
+                    ? "क्या अस्पताल की फार्मेसी से दवाएं लेनी हैं?"
+                    : "Fulfill Prescription via Hospital In-House Pharmacy?"}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPharmacyOption("YES")}
+                    className={`p-2.5 rounded-xl text-xs font-bold text-left border transition-all cursor-pointer ${
+                      pharmacyOption === "YES"
+                        ? "bg-teal-600 text-white border-teal-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-teal-300"
+                    }`}
+                  >
+                    <span>YES (Send to In-House Pharmacy + Patient)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPharmacyOption("NO")}
+                    className={`p-2.5 rounded-xl text-xs font-bold text-left border transition-all cursor-pointer ${
+                      pharmacyOption === "NO"
+                        ? "bg-teal-600 text-white border-teal-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-teal-300"
+                    }`}
+                  >
+                    <span>NO (Send to Patient Only)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Save & Send Button */}
+              <button
+                type="button"
+                onClick={handleSaveAndSend}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>📲 Save &amp; Send Digital Prescription</span>
+              </button>
+
+              {/* Toast Alerts Display */}
+              {dispatchStatus && (
+                <div className="space-y-2 pt-1">
+                  {dispatchStatus.patientAlert && (
+                    <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold leading-relaxed flex items-center gap-2 shadow-xs">
+                      <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+                      <span>{dispatchStatus.patientAlert}</span>
+                    </div>
+                  )}
+                  {dispatchStatus.pharmacyAlert && (
+                    <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold leading-relaxed flex items-center gap-2 shadow-xs">
+                      <Building size={16} className="text-blue-600 flex-shrink-0" />
+                      <span>{dispatchStatus.pharmacyAlert}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={() => setCompleted(true)}
-                  className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow cursor-pointer"
+                  className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <CheckCircle2 size={16} />
                   <span>Complete Consultation</span>
                 </button>
                 <button
+                  type="button"
                   onClick={onReturnToKiosk}
                   className="py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 >
