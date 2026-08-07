@@ -19,9 +19,11 @@ export interface VitalsEvalResult {
 }
 
 /**
- * Vitals Anomaly Engine: Evaluates hardware vitals against physiological bounds.
- * If Temperature > 105.0°F or < 92.0°F, SpO2 > 100% or < 50%, or HR > 180 or < 35 BPM,
- * flags overall status as ANOMALY_ERROR and requires a hardware sensor re-read.
+ * Vitals Biological Anomaly & Threshold Engine:
+ * Evaluates vitals against physiological bounds.
+ * Normal: Temp 97-99.5°F, SpO2 95-100%, HR 60-100 BPM
+ * Sick / Mild: Temp 99.6-104.9°F, SpO2 90-94%, HR 101-180 BPM
+ * Anomaly Error: Temp > 105°F (e.g. 110°F) or < 92°F, SpO2 < 50% or > 100%, HR > 180 BPM or < 35 BPM
  */
 export function evaluateVitalsEngine(vitals: VitalsInput): VitalsEvalResult {
   const { temperature, heartRate, spo2, sysBP, diaBP } = vitals;
@@ -34,7 +36,7 @@ export function evaluateVitalsEngine(vitals: VitalsInput): VitalsEvalResult {
     tempMsg = `Extreme Temperature Anomaly (${temperature}°F)`;
   } else if (temperature >= 99.6 || temperature <= 96.9) {
     tempStatus = 'MILD_ABNORMAL';
-    tempMsg = temperature >= 99.6 ? `Elevated Temperature (${temperature}°F)` : `Low Temperature (${temperature}°F)`;
+    tempMsg = temperature >= 99.6 ? `Elevated Fever (${temperature}°F)` : `Low Body Temp (${temperature}°F)`;
   }
 
   // Heart Rate Evaluation (BPM)
@@ -56,7 +58,7 @@ export function evaluateVitalsEngine(vitals: VitalsInput): VitalsEvalResult {
     spo2Msg = `Impossible SpO2 Reading (${spo2}%)`;
   } else if (spo2 < 95) {
     spo2Status = 'MILD_ABNORMAL';
-    spo2Msg = `Low SpO2 (${spo2}%)`;
+    spo2Msg = `Low Oxygen Level (${spo2}%)`;
   }
 
   // Blood Pressure Evaluation (mmHg)
@@ -67,7 +69,7 @@ export function evaluateVitalsEngine(vitals: VitalsInput): VitalsEvalResult {
     bpMsg = `Critical BP Reading (${sysBP}/${diaBP} mmHg)`;
   } else if (sysBP >= 130 || diaBP >= 85) {
     bpStatus = 'MILD_ABNORMAL';
-    bpMsg = `High BP (${sysBP}/${diaBP} mmHg)`;
+    bpMsg = `High Blood Pressure (${sysBP}/${diaBP} mmHg)`;
   }
 
   const isAnomaly =
@@ -87,7 +89,7 @@ export function evaluateVitalsEngine(vitals: VitalsInput): VitalsEvalResult {
   else if (isMild) overallStatus = 'MILD_ABNORMAL';
 
   const alertMessage = isAnomaly
-    ? 'Sensor Reading Anomaly Detected! Please re-attach hardware sensors and re-read.'
+    ? 'Humanly Impossible Reading Detected (Possible Hardware Error). Please re-enter/re-read vitals.'
     : null;
 
   return {

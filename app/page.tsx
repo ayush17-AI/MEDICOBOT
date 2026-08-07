@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type MouseEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   motion,
   AnimatePresence,
@@ -25,6 +26,7 @@ import UserHeader from "@/components/UserHeader";
 import FloatingMedicalIcons from "@/components/FloatingMedicalIcons";
 import FloatingMedicalBackground from "@/components/FloatingMedicalBackground";
 import { createClient } from "@/utils/supabase/client";
+import { patientInfoSchema } from "@/lib/validations/patientSchema";
 import {
   useSpeechRecognition,
   cleanTranscript,
@@ -644,31 +646,6 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
           </motion.button>
         ))}
       </div>
-
-      {/* Kiosk Hardware Check-In CTA — navigates directly to /patient-info route */}
-      <div className="relative z-10 flex flex-col items-center gap-3 w-full max-w-xl">
-        <div className="flex items-center gap-3 w-full">
-          <div className="flex-1 h-px bg-slate-200" />
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">OR</span>
-          <div className="flex-1 h-px bg-slate-200" />
-        </div>
-        <Link
-          href="/patient-info"
-          data-testid="kiosk-checkin-btn"
-          className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-3xl
-                     bg-gradient-to-r from-teal-600 to-emerald-600
-                     hover:from-teal-700 hover:to-emerald-700
-                     text-white font-black text-base shadow-xl shadow-teal-600/25
-                     border border-teal-500 transition-all hover:scale-[1.02] active:scale-95"
-        >
-          <Stethoscope size={22} />
-          <span>Start Hardware Kiosk Check-In</span>
-          <ChevronRight size={18} className="ml-auto" />
-        </Link>
-        <p className="text-[11px] text-slate-400 font-medium">
-          Skip voice setup — go directly to Patient Info → Vitals Dashboard → AI Triage
-        </p>
-      </div>
     </motion.div>
   );
 }
@@ -722,15 +699,20 @@ function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function TextInput({ placeholder, type="text", value, onChange }: {
+function TextInput({ placeholder, type="text", value, onChange, hasError, dataTestId, dataInvalid }: {
   placeholder: string; type?: string; value: string; onChange:(v:string)=>void;
+  hasError?: boolean; dataTestId?: string; dataInvalid?: boolean;
 }) {
   return (
     <input type={type} placeholder={placeholder} value={value}
+      data-testid={dataTestId}
+      data-invalid={dataInvalid ? "true" : "false"}
       onChange={(e) => onChange(e.target.value)}
-      className="flex-1 px-4 py-3 rounded-xl bg-white border border-slate-200
-                 focus:outline-none focus:ring-2 focus:ring-teal-400 text-slate-800
-                 placeholder:text-slate-400 shadow-sm text-sm transition" />
+      className={`flex-1 px-4 py-3 rounded-xl text-sm transition outline-none shadow-sm ${
+        hasError
+          ? "border-2 border-red-500 bg-red-50 text-red-900 placeholder:text-red-300 focus:ring-2 focus:ring-red-500"
+          : "bg-white border border-slate-200 focus:ring-2 focus:ring-teal-400 text-slate-800 placeholder:text-slate-400"
+      }`} />
   );
 }
 
@@ -783,6 +765,9 @@ function FormStage({
   const [emergency, setEmergency]   = useState(initialData.emergency || "");
   const [date] = useState(() => initialData.date || new Date().toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN"));
 
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [globalError, setGlobalError] = useState<string | null>(null);
+
   const activeMicRef = useRef<string | null>(null);
   useEffect(() => {
     activeMicRef.current = activeMic;
@@ -806,11 +791,13 @@ function FormStage({
       } else if (targetField === "sex") {
         const matchedGender = parseSexInput(spokenText);
         if (matchedGender === "Female") {
-          setSex(t.sexOptions[1] || "Female / महिला");
+          setSex(t.sexOptions[1] || "Female");
+        } else if (matchedGender === "Intersex") {
+          setSex(t.sexOptions[2] || "Intersex");
         } else if (matchedGender === "Other") {
-          setSex(t.sexOptions[2] || "Other / अन्य");
+          setSex(t.sexOptions[3] || "Other");
         } else {
-          setSex(t.sexOptions[0] || "Male / पुरुष");
+          setSex(t.sexOptions[0] || "Male");
         }
       } else if (targetField === "phone") {
         const preciseDigits = sanitizePhoneDigits(spokenText);
@@ -921,7 +908,42 @@ function FormStage({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       stopPhoneWhisperRecording();
     }
-    onProceed({ name, age, sex, phone, emergency, date });
+
+    // Determine normalized sex value
+    let normalizedSex = sex;
+    if (sex.includes("Male") || sex.includes("पुरुष")) normalizedSex = "Male";
+    else if (sex.includes("Female") || sex.includes("महिला")) normalizedSex = "Female";
+    else if (sex.includes("Intersex") || sex.includes("इंटरसेक्स")) normalizedSex = "Intersex";
+    else if (sex.includes("Other") || sex.includes("अन्य")) normalizedSex = "Other";
+
+    const cleanPhoneDigitsVal = phone.replace(/\D/g, "");
+    const cleanEmergencyDigitsVal = emergency.replace(/\D/g, "");
+
+    const validation = patientInfoSchema.safeParse({
+      fullName: name.trim(),
+      age: Number(age),
+      gender: normalizedSex,
+      countryCode: "+91",
+      phoneNumber: cleanPhoneDigitsVal,
+      emergencyContact: cleanEmergencyDigitsVal,
+    });
+
+    if (!validation.success) {
+      const errMap: Record<string, string> = {};
+      validation.error.issues.forEach((issue) => {
+        const key = issue.path[0] as string;
+        if (!errMap[key]) {
+          errMap[key] = issue.message;
+        }
+      });
+      setFormErrors(errMap);
+      setGlobalError("Please fill all required personal details correctly before proceeding.");
+      return;
+    }
+
+    setFormErrors({});
+    setGlobalError(null);
+    onProceed({ name, age, sex: normalizedSex, phone: cleanPhoneDigitsVal, emergency: cleanEmergencyDigitsVal, date });
   };
 
   return (
@@ -937,31 +959,87 @@ function FormStage({
       <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl shadow-teal-100/60
                       border border-slate-100 p-6 sm:p-8 flex flex-col gap-5">
 
+        {/* Global Warning Banner */}
+        {globalError && (
+          <div
+            data-testid="global-warning-banner"
+            className="p-4 rounded-2xl bg-red-50 border-2 border-red-500 text-red-800 flex items-start gap-3 shadow-sm animate-shake"
+          >
+            <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
+            <div className="text-xs sm:text-sm font-bold">{globalError}</div>
+          </div>
+        )}
+
         {/* Full Name */}
         <FieldRow label={t.name}>
           <User size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
-          <TextInput placeholder={t.name} value={name} onChange={setName} />
+          <div className="flex-1 flex flex-col">
+            <TextInput
+              placeholder={t.name}
+              value={name}
+              onChange={setName}
+              dataTestId="fullName-input"
+              dataInvalid={!!formErrors.fullName}
+              hasError={!!formErrors.fullName}
+            />
+            {formErrors.fullName && (
+              <p data-testid="error-message-fullName" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> {formErrors.fullName}
+              </p>
+            )}
+          </div>
           <MicBtn active={activeMic==="name"} onClick={() => toggleMic("name")} />
         </FieldRow>
 
         {/* Age */}
         <FieldRow label={t.age}>
-          <TextInput placeholder={t.age} type="number" value={age} onChange={setAge} />
+          <div className="flex-1 flex flex-col">
+            <TextInput
+              placeholder={t.age}
+              type="number"
+              value={age}
+              onChange={setAge}
+              dataTestId="age-input"
+              dataInvalid={!!formErrors.age}
+              hasError={!!formErrors.age}
+            />
+            {formErrors.age && (
+              <p data-testid="error-message-age" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> {formErrors.age}
+              </p>
+            )}
+          </div>
           <MicBtn active={activeMic==="age"} onClick={() => toggleMic("age")} />
         </FieldRow>
 
         {/* Sex */}
         <FieldRow label={t.sex}>
-          <div className="flex-1 flex gap-1.5 flex-wrap">
-            {t.sexOptions.map((s) => (
-              <button key={s} onClick={() => setSex(s)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  sex===s ? "bg-teal-600 text-white border-teal-600 shadow"
-                          : "bg-white border-slate-200 text-slate-500 hover:border-teal-400"
-                }`}>
-                {s}
-              </button>
-            ))}
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex gap-1.5 flex-wrap">
+              {t.sexOptions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSex(s)}
+                  data-testid="gender-select"
+                  data-invalid={!!formErrors.gender}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                    formErrors.gender
+                      ? "border-2 border-red-500 bg-red-50 text-red-900"
+                      : sex===s
+                      ? "bg-teal-600 text-white border-teal-600 shadow"
+                      : "bg-white border-slate-200 text-slate-500 hover:border-teal-400"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            {formErrors.gender && (
+              <p data-testid="error-message-gender" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> {formErrors.gender}
+              </p>
+            )}
           </div>
           <MicBtn active={activeMic==="sex"} onClick={() => toggleMic("sex")} />
         </FieldRow>
@@ -970,10 +1048,24 @@ function FormStage({
         <FieldRow label={t.phone}>
           <Phone size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
           <div className="flex-1 flex flex-col gap-1">
-            <TextInput placeholder={t.phone} type="tel" value={phone} onChange={setPhone} />
-            <span className="text-[10px] text-teal-600 font-semibold pl-1">
-              ✅ {t.whatsapp}
-            </span>
+            <TextInput
+              placeholder={t.phone}
+              type="tel"
+              value={phone}
+              onChange={setPhone}
+              dataTestId="phoneNumber-input"
+              dataInvalid={!!formErrors.phoneNumber}
+              hasError={!!formErrors.phoneNumber}
+            />
+            {formErrors.phoneNumber ? (
+              <p data-testid="error-message-phoneNumber" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> {formErrors.phoneNumber}
+              </p>
+            ) : (
+              <span className="text-[10px] text-teal-600 font-semibold pl-1">
+                ✅ {t.whatsapp}
+              </span>
+            )}
           </div>
           <MicBtn active={activeMic==="phone"} onClick={() => toggleMic("phone")} />
         </FieldRow>
@@ -981,7 +1073,22 @@ function FormStage({
         {/* Emergency */}
         <FieldRow label={t.emergency}>
           <Phone size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
-          <TextInput placeholder={t.emergency} type="tel" value={emergency} onChange={setEmergency} />
+          <div className="flex-1 flex flex-col">
+            <TextInput
+              placeholder={t.emergency}
+              type="tel"
+              value={emergency}
+              onChange={setEmergency}
+              dataTestId="emergencyContact-input"
+              dataInvalid={!!formErrors.emergencyContact}
+              hasError={!!formErrors.emergencyContact}
+            />
+            {formErrors.emergencyContact && (
+              <p data-testid="error-message-emergencyContact" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> {formErrors.emergencyContact}
+              </p>
+            )}
+          </div>
           <MicBtn active={activeMic==="emergency"} onClick={() => toggleMic("emergency")} />
         </FieldRow>
 
@@ -1887,6 +1994,7 @@ function DoctorDashboardStage({
    ROOT PAGE — PHASE STATE MACHINE
    ========================================================================= */
 export default function Page() {
+  const router = useRouter();
   const [phase, setPhase]         = useState<Phase>("logo");
   const [lang, setLang]           = useState<Lang>("en");
   const [logoKey, setLogoKey]     = useState<number>(0);
@@ -1919,7 +2027,15 @@ export default function Page() {
 
   const handleFormProceed = useCallback(async (data: PatientInfo) => {
     setPatient(data);
-    setPhase("symptoms");
+    const payload = {
+      name: data.name,
+      age: data.age,
+      sex: data.sex,
+      phone: data.phone,
+      emergency: data.emergency,
+      date: data.date,
+    };
+    sessionStorage.setItem('medicobot_patient', JSON.stringify(payload));
 
     try {
       const supabase = createClient();
@@ -1932,7 +2048,7 @@ export default function Page() {
               user_id: user.id,
               patient_name: data.name,
               phone_number: data.phone,
-              symptoms: '',
+              symptoms: 'Pending AI Symptom Evaluation',
               kiosk_data: data
             }
           ]);
@@ -1940,7 +2056,10 @@ export default function Page() {
     } catch (err) {
       console.warn("Supabase record insert notice:", err);
     }
-  }, []);
+
+    // Directly route user to dedicated vitals input page right after Personal Info step!
+    router.push('/vitals-dashboard');
+  }, [router]);
 
   const handleAnalyzeSymptoms = useCallback(async (symptoms: string) => {
     const cleanedSymptoms = cleanTranscript(symptoms);

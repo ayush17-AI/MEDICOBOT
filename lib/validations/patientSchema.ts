@@ -20,11 +20,12 @@ export const patientSchema = z.object({
     .min(1, { message: 'Age must be at least 1 year' })
     .max(120, { message: 'Age cannot exceed 120 years' }),
   gender: z
-    .enum(['Male', 'Female', 'Other'], {
-      message: 'Please select a gender',
+    .enum(['Male', 'Female', 'Intersex', 'Other'], {
+      message: 'Please select a valid sex / gender',
     }),
   countryCode: z.string().default('+91'),
   phoneNumber: z.string().min(1, { message: 'Phone number is required' }),
+  emergencyContact: z.string().optional(),
 }).superRefine((data, ctx) => {
   const config = COUNTRY_PHONE_CONFIG[data.countryCode] || COUNTRY_PHONE_CONFIG['+91'];
   const cleanPhone = data.phoneNumber.replace(/\D/g, '');
@@ -41,6 +42,17 @@ export const patientSchema = z.object({
       path: ['phoneNumber'],
       message: `Invalid phone format for ${config.name} (${data.countryCode})`,
     });
+  }
+
+  if (data.emergencyContact && data.emergencyContact.trim().length > 0) {
+    const cleanEmergency = data.emergencyContact.replace(/\D/g, '');
+    if (cleanEmergency.length < 8 || cleanEmergency.length > 15) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emergencyContact'],
+        message: 'Emergency contact number must be between 8 and 15 digits',
+      });
+    }
   }
 });
 

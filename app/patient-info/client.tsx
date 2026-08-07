@@ -4,14 +4,13 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { User, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User, Phone, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import {
   patientInfoSchema,
   COUNTRY_PHONE_CONFIG,
 } from '@/lib/validations/patientSchema';
 import { z } from 'zod';
 
-// Derive the type directly from the schema to stay in sync
 type FormValues = z.infer<typeof patientInfoSchema>;
 
 export default function PatientInfoClient() {
@@ -30,6 +29,7 @@ export default function PatientInfoClient() {
       fullName: '',
       countryCode: '+91',
       phoneNumber: '',
+      emergencyContact: '',
     },
     mode: 'onTouched',
   });
@@ -47,6 +47,7 @@ export default function PatientInfoClient() {
       countryCode: data.countryCode,
       mobile: data.phoneNumber,
       phone: `${data.countryCode} ${data.phoneNumber}`,
+      emergency: data.emergencyContact || '',
       date: new Date().toISOString().split('T')[0],
     };
     sessionStorage.setItem('medicobot_patient', JSON.stringify(payload));
@@ -55,7 +56,7 @@ export default function PatientInfoClient() {
 
   const onError = () => {
     setGlobalError(
-      'Please fill all required personal details correctly before proceeding.'
+      'Please fill all required personal details correctly before proceeding to Vitals Check.'
     );
   };
 
@@ -76,7 +77,7 @@ export default function PatientInfoClient() {
               Patient Personal Information
             </h1>
             <p className="text-xs font-semibold text-slate-500">
-              Step 1: Enter details before hardware sensor vitals check
+              Step 1 of Kiosk: Enter personal details before vitals check
             </p>
           </div>
         </div>
@@ -158,7 +159,7 @@ export default function PatientInfoClient() {
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                Gender <span className="text-red-500 font-black">*</span>
+                Sex / Gender <span className="text-red-500 font-black">*</span>
               </label>
               <select
                 {...register('gender')}
@@ -170,9 +171,10 @@ export default function PatientInfoClient() {
                     : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
                 }`}
               >
-                <option value="">-- Select Gender --</option>
+                <option value="">-- Select Sex --</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
+                <option value="Intersex">Intersex</option>
                 <option value="Other">Other</option>
               </select>
               {errors.gender && (
@@ -187,7 +189,7 @@ export default function PatientInfoClient() {
             </div>
           </div>
 
-          {/* Country Code & Phone */}
+          {/* Country Code & Mobile Number */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
               Mobile Number <span className="text-red-500 font-black">*</span>
@@ -210,7 +212,7 @@ export default function PatientInfoClient() {
                 <input
                   {...register('phoneNumber')}
                   type="tel"
-                  placeholder={`${currentCountryConfig.digits}-digit number`}
+                  placeholder={`${currentCountryConfig.digits}-digit mobile number`}
                   data-testid="phoneNumber-input"
                   data-invalid={errors.phoneNumber ? 'true' : 'false'}
                   className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
@@ -237,6 +239,37 @@ export default function PatientInfoClient() {
             )}
           </div>
 
+          {/* Emergency Contact Number */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Emergency Contact Number <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <div className="relative">
+              <Phone size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
+              <input
+                {...register('emergencyContact')}
+                type="tel"
+                placeholder="Emergency contact mobile number"
+                data-testid="emergencyContact-input"
+                data-invalid={errors.emergencyContact ? 'true' : 'false'}
+                className={`w-full pl-10 pr-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
+                  errors.emergencyContact
+                    ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
+                    : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
+                }`}
+              />
+            </div>
+            {errors.emergencyContact && (
+              <p
+                data-testid="error-message-emergencyContact"
+                className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1"
+              >
+                <AlertCircle size={12} />
+                {errors.emergencyContact.message as string}
+              </p>
+            )}
+          </div>
+
           {/* Submit */}
           <div className="pt-4">
             <button
@@ -244,7 +277,7 @@ export default function PatientInfoClient() {
               data-testid="submit-patient-btn"
               className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold text-sm sm:text-base shadow-lg shadow-teal-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Proceed to Hardware Vitals Check</span>
+              <span>Proceed to Vitals Check →</span>
               <ArrowRight size={18} />
             </button>
           </div>

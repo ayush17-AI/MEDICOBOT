@@ -15,6 +15,7 @@ import {
   Cpu,
   User,
   Sliders,
+  Edit3,
 } from 'lucide-react';
 import {
   evaluateVitalsEngine,
@@ -33,10 +34,28 @@ export default function VitalsDashboardClient() {
     phone: string;
   } | null>(null);
 
-  const [vitals, setVitals] = useState<VitalsInput | null>(null);
-  const [evalResult, setEvalResult] = useState<VitalsEvalResult | null>(null);
+  // Manual & Simulated Vitals state initialized to normal default
+  const [vitals, setVitals] = useState<VitalsInput>({
+    temperature: 98.6,
+    heartRate: 72,
+    spo2: 98,
+    sysBP: 120,
+    diaBP: 80,
+  });
+
+  const [evalResult, setEvalResult] = useState<VitalsEvalResult>(() =>
+    evaluateVitalsEngine({
+      temperature: 98.6,
+      heartRate: 72,
+      spo2: 98,
+      sysBP: 120,
+      diaBP: 80,
+    })
+  );
+
   const [isReading, setIsReading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   useEffect(() => {
     try {
@@ -46,6 +65,16 @@ export default function VitalsDashboardClient() {
       console.warn('Failed to load patient session:', e);
     }
   }, []);
+
+  const updateVitals = (newVitals: VitalsInput) => {
+    setVitals(newVitals);
+    setEvalResult(evaluateVitalsEngine(newVitals));
+  };
+
+  const handleManualChange = (field: keyof VitalsInput, value: number) => {
+    const next = { ...vitals, [field]: value };
+    updateVitals(next);
+  };
 
   const runSensorRead = (preset: 'normal' | 'mild' | 'anomaly' = 'normal') => {
     setIsReading(true);
@@ -58,10 +87,9 @@ export default function VitalsDashboardClient() {
       } else {
         data = { temperature: 98.6, heartRate: 72, spo2: 98, sysBP: 120, diaBP: 80 };
       }
-      setVitals(data);
-      setEvalResult(evaluateVitalsEngine(data));
+      updateVitals(data);
       setIsReading(false);
-    }, 800);
+    }, 600);
   };
 
   const handleProceed = async () => {
@@ -106,7 +134,6 @@ export default function VitalsDashboardClient() {
     vitals && evalResult && !evalResult.isAnomaly && !isSyncing
   );
 
-  // Reusable status badge
   const statusBadge = (status: string | undefined, message: string) => {
     const isErr = status === 'ANOMALY_ERROR';
     const isMild = status === 'MILD_ABNORMAL';
@@ -142,7 +169,7 @@ export default function VitalsDashboardClient() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800">
-                  Hardware Sensor Vitals Engine
+                  Hardware Sensor &amp; Manual Vitals Engine
                 </span>
                 {patient && (
                   <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
@@ -152,15 +179,23 @@ export default function VitalsDashboardClient() {
                 )}
               </div>
               <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
-                Kiosk Vitals Read &amp; Alert Dashboard
+                Dedicated Vitals Read &amp; Threshold Dashboard
               </h1>
             </div>
           </div>
 
-          {/* Preset Buttons */}
+          {/* Simulation & Manual Mode Presets */}
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setManualMode(!manualMode)}
+              data-testid="toggle-manual-input-btn"
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <Edit3 size={12} />
+              {manualMode ? 'Hide Manual Inputs' : 'Edit Vitals Manually'}
+            </button>
             <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-              <Sliders size={13} /> Simulation:
+              <Sliders size={12} /> Test Presets:
             </span>
             <button
               onClick={() => runSensorRead('normal')}
@@ -193,7 +228,7 @@ export default function VitalsDashboardClient() {
         {evalResult?.isAnomaly && (
           <div
             data-testid="vitals-anomaly-alert"
-            className="p-6 rounded-3xl bg-red-600 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-2 border-red-700"
+            className="p-6 rounded-3xl bg-red-600 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-2 border-red-700 animate-shake"
           >
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
@@ -204,11 +239,10 @@ export default function VitalsDashboardClient() {
                   Sensor Reading Anomaly Detected!
                 </span>
                 <p className="text-sm sm:text-base font-bold leading-snug">
-                  {evalResult.alertMessage}
+                  Humanly Impossible Reading Detected (Possible Hardware Error). Please re-enter/re-read vitals.
                 </p>
                 <p className="text-xs text-red-100 mt-1 font-medium">
-                  Readings cross human physiological bounds. Re-attach sensors
-                  and re-read.
+                  Readings cross biological bounds (e.g., Temp &gt; 105°F, SpO2 &lt; 50%, or HR &gt; 180 BPM). Please re-attach hardware sensors or correct manual inputs.
                 </p>
               </div>
             </div>
@@ -226,9 +260,9 @@ export default function VitalsDashboardClient() {
           </div>
         )}
 
-        {/* 4 Vitals Cards */}
+        {/* 4 Vitals Cards Grid with Interactive Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Temperature */}
+          {/* Temperature Card */}
           <div
             data-testid="vital-card-temperature"
             className={`p-5 rounded-3xl bg-white border transition-all ${
@@ -241,26 +275,40 @@ export default function VitalsDashboardClient() {
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Body Temp
+                Body Temp (°F)
               </span>
               <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
                 <Thermometer size={20} />
               </div>
             </div>
             <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {vitals ? `${vitals.temperature}°F` : '--'}
+              {vitals.temperature}°F
             </div>
-            <div className="mt-2">
-              {evalResult
-                ? statusBadge(
-                    evalResult.temperature.status,
-                    evalResult.temperature.message
-                  )
-                : <span className="text-xs text-slate-400">Awaiting read</span>}
+
+            {/* Interactive Slider / Input */}
+            <div className="mt-3 space-y-1">
+              <input
+                type="number"
+                step="0.1"
+                min="90"
+                max="115"
+                value={vitals.temperature}
+                onChange={(e) => handleManualChange('temperature', parseFloat(e.target.value) || 98.6)}
+                className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
+                placeholder="Temp °F"
+                data-testid="input-temperature"
+              />
+            </div>
+
+            <div className="mt-3">
+              {statusBadge(
+                evalResult.temperature.status,
+                evalResult.temperature.message
+              )}
             </div>
           </div>
 
-          {/* Heart Rate */}
+          {/* Heart Rate Card */}
           <div
             data-testid="vital-card-heartrate"
             className={`p-5 rounded-3xl bg-white border transition-all ${
@@ -273,26 +321,39 @@ export default function VitalsDashboardClient() {
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Heart Rate
+                Heart Rate (BPM)
               </span>
               <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
                 <Heart size={20} />
               </div>
             </div>
             <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {vitals ? `${vitals.heartRate} BPM` : '--'}
+              {vitals.heartRate} BPM
             </div>
-            <div className="mt-2">
-              {evalResult
-                ? statusBadge(
-                    evalResult.heartRate.status,
-                    evalResult.heartRate.message
-                  )
-                : <span className="text-xs text-slate-400">Awaiting read</span>}
+
+            {/* Interactive Input */}
+            <div className="mt-3 space-y-1">
+              <input
+                type="number"
+                min="20"
+                max="240"
+                value={vitals.heartRate}
+                onChange={(e) => handleManualChange('heartRate', parseInt(e.target.value) || 72)}
+                className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
+                placeholder="Heart Rate BPM"
+                data-testid="input-heartrate"
+              />
+            </div>
+
+            <div className="mt-3">
+              {statusBadge(
+                evalResult.heartRate.status,
+                evalResult.heartRate.message
+              )}
             </div>
           </div>
 
-          {/* SpO2 */}
+          {/* SpO2 Card */}
           <div
             data-testid="vital-card-spo2"
             className={`p-5 rounded-3xl bg-white border transition-all ${
@@ -305,23 +366,36 @@ export default function VitalsDashboardClient() {
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                SpO2 Oxygen
+                SpO2 Oxygen (%)
               </span>
               <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
                 <Activity size={20} />
               </div>
             </div>
             <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {vitals ? `${vitals.spo2}%` : '--'}
+              {vitals.spo2}%
             </div>
-            <div className="mt-2">
-              {evalResult
-                ? statusBadge(evalResult.spo2.status, evalResult.spo2.message)
-                : <span className="text-xs text-slate-400">Awaiting read</span>}
+
+            {/* Interactive Input */}
+            <div className="mt-3 space-y-1">
+              <input
+                type="number"
+                min="30"
+                max="100"
+                value={vitals.spo2}
+                onChange={(e) => handleManualChange('spo2', parseInt(e.target.value) || 98)}
+                className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
+                placeholder="SpO2 %"
+                data-testid="input-spo2"
+              />
+            </div>
+
+            <div className="mt-3">
+              {statusBadge(evalResult.spo2.status, evalResult.spo2.message)}
             </div>
           </div>
 
-          {/* Blood Pressure */}
+          {/* Blood Pressure Card */}
           <div
             data-testid="vital-card-bp"
             className={`p-5 rounded-3xl bg-white border transition-all ${
@@ -334,19 +408,42 @@ export default function VitalsDashboardClient() {
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Blood Pressure
+                Blood Pressure (mmHg)
               </span>
               <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
                 <Gauge size={20} />
               </div>
             </div>
             <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {vitals ? `${vitals.sysBP}/${vitals.diaBP}` : '--'}
+              {vitals.sysBP}/{vitals.diaBP}
             </div>
-            <div className="mt-2">
-              {evalResult
-                ? statusBadge(evalResult.bp.status, evalResult.bp.message)
-                : <span className="text-xs text-slate-400">Awaiting read</span>}
+
+            {/* Interactive BP Inputs */}
+            <div className="mt-3 grid grid-cols-2 gap-1">
+              <input
+                type="number"
+                min="50"
+                max="240"
+                value={vitals.sysBP}
+                onChange={(e) => handleManualChange('sysBP', parseInt(e.target.value) || 120)}
+                className="w-full px-2 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
+                placeholder="Sys"
+                data-testid="input-sysbp"
+              />
+              <input
+                type="number"
+                min="30"
+                max="150"
+                value={vitals.diaBP}
+                onChange={(e) => handleManualChange('diaBP', parseInt(e.target.value) || 80)}
+                className="w-full px-2 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
+                placeholder="Dia"
+                data-testid="input-diabp"
+              />
+            </div>
+
+            <div className="mt-3">
+              {statusBadge(evalResult.bp.status, evalResult.bp.message)}
             </div>
           </div>
         </div>
