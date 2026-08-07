@@ -32,3 +32,37 @@ html, body {
 ::-webkit-scrollbar {
   display: none;
 }
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(6deg);
+  }
+}
+
+@keyframes floatReverse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(15px) rotate(-8deg);
+  }
+}
+
+.animate-float-1 {
+  animation: floatSlow 5s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: floatReverse 6.5s ease-in-out infinite 1s;
+}
+
+.animate-float-3 {
+  animation: floatSlow 4s ease-in-out infinite 0.5s;
+}
+
+.animate-float-4 {
+  animation: floatReverse 7s ease-in-out infinite 2s;
+}
