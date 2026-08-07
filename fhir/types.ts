@@ -27,8 +27,10 @@ export interface InternalPatient {
   id: string;
   fullName: string;
   dob?: string; // ISO date, e.g. "1990-05-14"
+  age?: string | number;
   gender?: "male" | "female" | "other" | "unknown";
   phone?: string;
+  countryCode?: string;
   language?: string; // regional language captured at kiosk
   tokenNumber?: string; // room/cabinet navigation token
   department?: string; // allocated specialty, e.g. "Cardiology"
