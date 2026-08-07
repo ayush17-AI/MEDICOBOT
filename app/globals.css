@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --crimson-accent: #dc2626;
+}
+
+/* Stark White Background & Paper Sketchbook Styling */
+html, body {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* Custom Architectural Sketch Font Utility */
+.font-sketch {
+  font-family: var(--font-sketch), cursive, sans-serif;
+}
+
+/* Fine-line Cross Hatching & Crimson Marker Accent Utilities */
+.sketch-line-hatch {
+  stroke-dasharray: 2 2;
+}
+
+/* Hide scrollbars for fullscreen canvas */
+::-webkit-scrollbar {
+  display: none;
+}
