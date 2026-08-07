@@ -23,7 +23,7 @@ export default function UserHeader() {
   }
 
   return (
-    <header className="w-full bg-slate-900 text-white px-6 py-3 flex justify-between items-center shadow-md relative z-50">
+    <header className="w-full bg-slate-900 text-white px-6 py-3 flex justify-between items-center shadow-md z-30 relative">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm text-white">
           {user.email?.[0]?.toUpperCase() || 'U'}
@@ -31,6 +31,7 @@ export default function UserHeader() {
         <span className="text-sm text-gray-300 font-medium hidden sm:inline">{user.email}</span>
       </div>
       <button
+        type="button"
         onClick={handleLogout}
         className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition cursor-pointer"
       >

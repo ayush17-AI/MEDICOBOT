@@ -22,6 +22,7 @@ import {
 import GoogleAuthGate from "@/components/GoogleAuthGate";
 import UserHeader from "@/components/UserHeader";
 import KidsVoicePlayer from "@/components/KidsVoicePlayer";
+import FloatingMedicalIcons from "@/components/FloatingMedicalIcons";
 import { createClient } from "@/utils/supabase/client";
 import {
   useSpeechRecognition,
@@ -2015,6 +2016,7 @@ export default function Page() {
             style={{ background: "linear-gradient(135deg,#F0FDFA 0%,#F8FAFC 50%,#EFF6FF 100%)" }}
           >
             <MedCrossGrid />
+            <FloatingMedicalIcons />
             <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-teal-300/20 blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-blue-300/20 blur-3xl pointer-events-none" />
 
