@@ -21,8 +21,8 @@ import {
 } from "lucide-react";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
 import UserHeader from "@/components/UserHeader";
-import MedicobotAnimatedTitle from "@/components/MedicobotAnimatedTitle";
 import FloatingMedicalIcons from "@/components/FloatingMedicalIcons";
+import FloatingMedicalBackground from "@/components/FloatingMedicalBackground";
 import { createClient } from "@/utils/supabase/client";
 import {
   useSpeechRecognition,
@@ -407,46 +407,50 @@ function Wordmark({ smoking }: { smoking: boolean }) {
   );
 }
 
-const triggerCuteMedicobotVoice = () => {
-  try {
-    const audio = new Audio('/sounds/medicobot-kid.mp3');
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        fallbackCuteKidVoice();
-      });
-    }
-  } catch (e) {
-    fallbackCuteKidVoice();
-  }
-};
 
-function fallbackCuteKidVoice() {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance("Medicobot!");
-    utterance.pitch = 1.9; // High pitch for cute child voice
-    utterance.rate = 1.1;  // Energetic pace
-    utterance.volume = 1.0;
-    window.speechSynthesis.speak(utterance);
-  }
-}
 
 function LogoStage({ onDone }: { onDone: () => void }) {
   const [smoking, setSmoking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasPlayedRef = useRef(false);
 
   useEffect(() => {
-    // Trigger cute child voice announcement right when logo assembly completes
-    const voiceTimer = setTimeout(() => {
-      triggerCuteMedicobotVoice();
-    }, TITLE_DONE * 1000);
+    // Single instance of audio
+    const voice = new Audio('/audio/landing-voice.mp3');
+    voice.preload = 'auto';
+    audioRef.current = voice;
+
+    // Letter 'B' enters at exactly 900ms (6 * 150ms)
+    // Adjust timer slightly to match visual appearance (950ms)
+    const letterBEntranceTime = 950;
+
+    const timer = setTimeout(() => {
+      if (!hasPlayedRef.current) {
+        hasPlayedRef.current = true;
+        voice.play().catch(() => {
+          // Fallback if browser blocks autoplay
+          const handleFirstClick = () => {
+            voice.play().catch(() => {});
+            window.removeEventListener('click', handleFirstClick);
+            window.removeEventListener('keydown', handleFirstClick);
+          };
+          window.addEventListener('click', handleFirstClick);
+          window.addEventListener('keydown', handleFirstClick);
+        });
+      }
+    }, letterBEntranceTime);
 
     const t1 = setTimeout(() => setSmoking(true),  PHASE_CHANGE * 1000 - 900);
     const t2 = setTimeout(() => onDone(),           PHASE_CHANGE * 1000 + 200);
+
     return () => {
-      clearTimeout(voiceTimer);
+      clearTimeout(timer);
       clearTimeout(t1);
       clearTimeout(t2);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, [onDone]);
 
@@ -454,6 +458,7 @@ function LogoStage({ onDone }: { onDone: () => void }) {
     <motion.div key="logo-stage"
       className="w-full h-screen flex items-center justify-center relative overflow-hidden bg-white"
       exit={{ opacity:0, transition:{ duration:0.5 } }}>
+      <FloatingMedicalBackground />
       <Wordmark smoking={smoking} />
       <div className="absolute top-6 left-6  w-2 h-2 rounded-full bg-teal-400  opacity-60" />
       <div className="absolute top-6 right-6 w-2 h-2 rounded-full bg-red-400   opacity-60" />
@@ -572,6 +577,7 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
       style={{ background:"linear-gradient(135deg,#F0FDFA 0%,#F8FAFC 55%,#EFF6FF 100%)" }}>
 
       <MedCrossGrid />
+      <FloatingMedicalBackground />
 
       <motion.button
         onClick={onReplay}
@@ -583,7 +589,6 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
         <span>← Replay Intro</span>
       </motion.button>
 
-      <MedicobotAnimatedTitle />
 
       <div className="relative z-10 text-center space-y-2">
         <div className="flex items-center justify-center gap-2 mb-4">
@@ -2016,7 +2021,7 @@ export default function Page() {
             style={{ background: "linear-gradient(135deg,#F0FDFA 0%,#F8FAFC 50%,#EFF6FF 100%)" }}
           >
             <MedCrossGrid />
-            <FloatingMedicalIcons />
+            <FloatingMedicalBackground />
             <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-teal-300/20 blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-blue-300/20 blur-3xl pointer-events-none" />
 

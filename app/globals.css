@@ -33,36 +33,38 @@ html, body {
   display: none;
 }
 
+/* Floating Background Keyframes */
 @keyframes floatSlow {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-15px) rotate(6deg);
-  }
+  0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); }
+  50% { transform: translateY(-18px) rotate(6deg) scale(1.05); }
 }
 
-@keyframes floatReverse {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(15px) rotate(-8deg);
-  }
+@keyframes floatMedium {
+  0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); }
+  50% { transform: translateY(-12px) rotate(-8deg) scale(0.98); }
 }
 
-.animate-float-1 {
-  animation: floatSlow 5s ease-in-out infinite;
+@keyframes floatFast {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(4deg); }
 }
 
-.animate-float-2 {
-  animation: floatReverse 6.5s ease-in-out infinite 1s;
+.animate-float-slow { animation: floatSlow 5s ease-in-out infinite; }
+.animate-float-medium { animation: floatMedium 4s ease-in-out infinite; }
+.animate-float-fast { animation: floatFast 3s ease-in-out infinite; }
+
+.animate-float-1 { animation: floatSlow 5s ease-in-out infinite; }
+.animate-float-2 { animation: floatMedium 6.5s ease-in-out infinite 1s; }
+.animate-float-3 { animation: floatSlow 4s ease-in-out infinite 0.5s; }
+.animate-float-4 { animation: floatFast 7s ease-in-out infinite 2s; }
+
+/* Letter Entrance Animation */
+@keyframes letterBounce {
+  0% { opacity: 0; transform: translateY(-20px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
-.animate-float-3 {
-  animation: floatSlow 4s ease-in-out infinite 0.5s;
-}
-
-.animate-float-4 {
-  animation: floatReverse 7s ease-in-out infinite 2s;
+.animate-letter {
+  display: inline-block;
+  animation: letterBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }

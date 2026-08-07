@@ -1,46 +1,76 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { motion, type Variants } from 'framer-motion'
 
-export default function MedicobotAnimatedTitle() {
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+const TITLE_LETTERS = ["M", "E", "D", "I", "C", "O", "B", "O", "T"]
 
-  const playVoice = () => {
-    if (!audioRef.current) return
-    audioRef.current.currentTime = 0
-    audioRef.current
-      .play()
-      .then(() => setIsSpeaking(true))
-      .catch((err) => console.error("Voice Play Error:", err))
-  }
+const LETTER_COLORS = [
+  "from-teal-400 to-emerald-500",
+  "from-emerald-400 to-teal-600",
+  "from-teal-500 to-cyan-500",
+  "from-cyan-400 to-blue-500",
+  "from-blue-400 to-indigo-500",
+  "from-indigo-400 to-purple-500",
+  "from-purple-400 to-pink-500",
+  "from-pink-400 to-rose-500",
+  "from-rose-400 to-teal-500",
+]
 
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.06,
+      delayChildren: 0.1,
+    },
+  },
+}
+
+const letterVariants: Variants = {
+  hidden: { y: -30, opacity: 0, scale: 0.6 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    scale: 1,
+    transition: {
+      type: "spring",
+      damping: 12,
+      stiffness: 200,
+    },
+  },
+}
+
+export default function MedicobotAnimatedTitle({ onLetterBStart }: { onLetterBStart?: () => void }) {
   return (
     <div className="relative flex flex-col items-center justify-center my-6 z-20">
-      {/* Audio Element linked to the kid's voice file */}
-      <audio
-        ref={audioRef}
-        src="/audio/landing-voice.mp3"
-        preload="auto"
-        onEnded={() => setIsSpeaking(false)}
-      />
-
-      {/* Interactive Title with Bouncing/Pulse Animation on Voice Play */}
-      <div
-        onClick={playVoice}
-        className={`cursor-pointer select-none transition-transform duration-300 transform hover:scale-105 active:scale-95 ${
-          isSpeaking ? 'animate-bounce' : ''
-        }`}
-        title="Click to hear MEDICOBOT!"
-      >
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-teal-400 via-indigo-500 to-pink-500 drop-shadow-md">
-          MEDICOBOT
-        </h1>
+      <div className="relative select-none px-6 py-3 rounded-3xl bg-white/40 backdrop-blur-sm border border-slate-100 transition-all duration-300">
+        <motion.h1
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="relative text-4xl sm:text-6xl md:text-7xl font-black tracking-wider flex items-center justify-center gap-0.5 sm:gap-1 drop-shadow-md"
+        >
+          {TITLE_LETTERS.map((letter, index) => {
+            const isLetterB = index === 6; // 'B' in M-E-D-I-C-O-B-O-T
+            return (
+              <motion.span
+                key={index}
+                variants={letterVariants}
+                style={{ animationDelay: `${index * 0.12}s` }}
+                onAnimationStart={() => {
+                  if (isLetterB) {
+                    onLetterBStart?.();
+                  }
+                }}
+                className={`inline-block animate-letter bg-gradient-to-b ${LETTER_COLORS[index]} bg-clip-text text-transparent transform-gpu`}
+              >
+                {letter}
+              </motion.span>
+            );
+          })}
+        </motion.h1>
       </div>
-
-      <p className="text-xs text-gray-500 mt-2 font-medium">
-        (Tap the title to hear Medicobot! 🔊)
-      </p>
     </div>
   )
 }
