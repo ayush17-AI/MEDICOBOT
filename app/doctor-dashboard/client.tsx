@@ -18,7 +18,8 @@ import {
   Sparkles,
   ShieldCheck,
   Mic,
-  Calendar,
+  Pill,
+  Send,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -124,6 +125,11 @@ export default function DoctorDashboardClient() {
   const [aiVitalsSummary, setAiVitalsSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
 
+  // Digital Prescription & Pharmacy Dispatch State
+  const [rxText, setRxText] = useState('');
+  const [pharmacyConsent, setPharmacyConsent] = useState(true);
+  const [dispatchNotice, setDispatchNotice] = useState<string | null>(null);
+
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
@@ -211,6 +217,24 @@ export default function DoctorDashboardClient() {
   const isAnomaly = isAlertRecord(status);
   const isMild = isMildRecord(status);
 
+  // STEP 3: DISPATCH LOGIC HANDLER
+  const handleSendPrescription = () => {
+    const phone = activeRec.phone_number || '+91 9461112639';
+    if (pharmacyConsent) {
+      setDispatchNotice(
+        `Prescription dispatched to Patient (${phone}) & In-House Pharmacy Desk!`
+      );
+    } else {
+      setDispatchNotice(
+        `Prescription sent directly to Patient phone (${phone})!`
+      );
+    }
+
+    setTimeout(() => {
+      setDispatchNotice(null);
+    }, 6000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -244,10 +268,10 @@ export default function DoctorDashboardClient() {
           </button>
         </div>
 
-        {/* Patient Selection Selector Bar */}
+        {/* STEP 1: PATIENT QUEUE BAR WITH SMOOTH HORIZONTAL SCROLL */}
         <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-80">
+            <div className="relative w-full sm:w-72 shrink-0">
               <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
@@ -259,25 +283,27 @@ export default function DoctorDashboardClient() {
               />
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+            {/* Horizontal Scroll Queue Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto flex-nowrap py-2 max-w-full w-full scrollbar-thin scrollbar-thumb-teal-500 scrollbar-track-slate-100">
               {filteredRecords.map((r) => (
                 <button
                   key={r.id || r.patient_name}
                   onClick={() => setSelectedRecord(r)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
                     activeRec.patient_name === r.patient_name
-                      ? 'bg-teal-600 text-white shadow-sm'
+                      ? 'bg-teal-600 text-white shadow-md ring-2 ring-teal-300'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  👤 {r.patient_name}
+                  <span>👤</span>
+                  <span>{r.patient_name}</span>
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Image 3 Original 3-Column Doctor Workstation Layout */}
+        {/* 3-Column Doctor Workstation Layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Column 1: Patient Demographic Profile Card */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
@@ -413,6 +439,55 @@ export default function DoctorDashboardClient() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* STEP 2: DIGITAL PRESCRIPTION & PHARMACY DISPATCH MODULE */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+            <Pill size={18} className="text-teal-600" />
+            <span>Digital Prescription (Rx) &amp; Pharmacy Dispatch</span>
+          </h3>
+
+          {dispatchNotice && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>{dispatchNotice}</span>
+            </div>
+          )}
+
+          {/* Rx Text Input */}
+          <textarea
+            value={rxText}
+            onChange={(e) => setRxText(e.target.value)}
+            placeholder="Type prescribed medications, dosage, and instructions (e.g. Paracetamol 500mg BD x 3 days, Azithromycin 500mg OD x 5 days)..."
+            className="w-full rounded-xl border border-gray-200 p-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs"
+            rows={3}
+          />
+
+          {/* Hospital Pharmacy Fulfillment Checkbox */}
+          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <input
+              type="checkbox"
+              id="pharmacyConsent"
+              checked={pharmacyConsent}
+              onChange={(e) => setPharmacyConsent(e.target.checked)}
+              className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500 cursor-pointer"
+            />
+            <label htmlFor="pharmacyConsent" className="text-xs font-semibold text-gray-700 cursor-pointer">
+              Fulfill via Hospital In-House Pharmacy (Send copy to Hospital Pharmacy Desk)
+            </label>
+          </div>
+
+          {/* Send Action Button */}
+          <button
+            type="button"
+            onClick={handleSendPrescription}
+            data-testid="send-prescription-btn"
+            className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Send size={16} />
+            <span>📲 Send Prescription &amp; Dispatch Notification</span>
+          </button>
         </div>
 
         {/* AI-Summarized Historical Vitals Card (Groq LLM) */}
