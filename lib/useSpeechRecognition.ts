@@ -191,6 +191,7 @@ export const processPhoneVoiceInput = parsePhoneDigitsStrict;
 export const cleanPhoneDigits = parsePhoneDigitsStrict;
 export const parsePhoneNumber = parsePhoneDigitsStrict;
 export const normalizePhoneNumber = parsePhoneDigitsStrict;
+export const extractCleanPhoneDigits = parsePhoneDigitsStrict;
 
 export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
   const txt = rawTranscript.toLowerCase().trim();

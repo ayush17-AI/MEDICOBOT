@@ -34,6 +34,8 @@ import {
   getProductionAudioStream,
   getCleanMicStream,
   parsePhoneDigitsStrict,
+  extractCleanPhoneDigits,
+  startProductionVoiceCapture,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -766,23 +768,40 @@ function FormStage({
         const formData = new FormData();
         formData.append('file', audioBlob);
 
+        let success = false;
         try {
           const res = await fetch('/api/whisper', {
             method: 'POST',
             body: formData,
           });
 
-          const data = await res.json();
-          if (data.text) {
-            const parsedNumber = parsePhoneDigitsStrict(data.text);
-            if (field === "phone") {
-              setPhone(parsedNumber);
-            } else {
-              setEmergency(parsedNumber);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.text) {
+              const parsedNumber = extractCleanPhoneDigits(data.text);
+              if (field === "phone") {
+                setPhone(parsedNumber);
+              } else {
+                setEmergency(parsedNumber);
+              }
+              success = true;
             }
           }
         } catch (err) {
           console.error('Groq Whisper Transcription Failed:', err);
+        }
+
+        if (!success) {
+          console.warn('Groq Whisper failed or empty, fallback to client-side voice capture');
+          startProductionVoiceCapture(
+            (spokenText) => {
+              const digits = extractCleanPhoneDigits(spokenText);
+              if (field === "phone") setPhone(digits);
+              else setEmergency(digits);
+            },
+            () => setActiveMic(null),
+            lang === "hi" ? "hi-IN" : "en-US"
+          );
         }
 
         try {
