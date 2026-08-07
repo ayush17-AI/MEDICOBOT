@@ -19,6 +19,7 @@ import {
   Globe, Calendar, ChevronRight, Stethoscope, Star, Clock, AlertTriangle,
   ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building, LogOut,
 } from "lucide-react";
+import Link from "next/link";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
 import UserHeader from "@/components/UserHeader";
 import FloatingMedicalIcons from "@/components/FloatingMedicalIcons";
@@ -642,6 +643,31 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
             </div>
           </motion.button>
         ))}
+      </div>
+
+      {/* Kiosk Hardware Check-In CTA — navigates directly to /patient-info route */}
+      <div className="relative z-10 flex flex-col items-center gap-3 w-full max-w-xl">
+        <div className="flex items-center gap-3 w-full">
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">OR</span>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
+        <Link
+          href="/patient-info"
+          data-testid="kiosk-checkin-btn"
+          className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-3xl
+                     bg-gradient-to-r from-teal-600 to-emerald-600
+                     hover:from-teal-700 hover:to-emerald-700
+                     text-white font-black text-base shadow-xl shadow-teal-600/25
+                     border border-teal-500 transition-all hover:scale-[1.02] active:scale-95"
+        >
+          <Stethoscope size={22} />
+          <span>Start Hardware Kiosk Check-In</span>
+          <ChevronRight size={18} className="ml-auto" />
+        </Link>
+        <p className="text-[11px] text-slate-400 font-medium">
+          Skip voice setup — go directly to Patient Info → Vitals Dashboard → AI Triage
+        </p>
       </div>
     </motion.div>
   );
