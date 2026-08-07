@@ -23,7 +23,7 @@ import {
 /* =========================================================================
    TYPES & DATA MODELS
    ========================================================================= */
-type Phase = "logo" | "language" | "form" | "symptoms" | "decision" | "doctors" | "confirmation";
+type Phase = "logo" | "language" | "form" | "symptoms" | "decision" | "doctors" | "confirmation" | "dashboard";
 type Lang  = "en" | "hi";
 type SelectMode = "manual" | "ai";
 
@@ -1326,6 +1326,7 @@ function ConfirmationStage({
   doctor,
   tokenNum,
   onReset,
+  onOpenDashboard,
   onBack,
 }: {
   lang: Lang;
@@ -1334,6 +1335,7 @@ function ConfirmationStage({
   doctor: Doctor;
   tokenNum: string;
   onReset: () => void;
+  onOpenDashboard: () => void;
   onBack: () => void;
 }) {
   useEffect(() => {
@@ -1387,19 +1389,245 @@ function ConfirmationStage({
           </div>
         </div>
 
+        {/* Localized Room & Floor Navigation Card */}
+        <div className="w-full p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-left space-y-2 shadow-xs">
+          <div className="flex items-center justify-between flex-wrap gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+              <span>📍 {lang === "hi" ? "कमरा और मंजिल निर्देश" : "Room & Floor Navigation"}</span>
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[10px] font-extrabold border border-amber-300">
+              Room 204 | Cabinet 2, 1st Floor
+            </span>
+          </div>
+          <p className="text-xs font-bold text-slate-900">
+            {lang === "hi"
+              ? "कैबिनेट 2 (कमरा नंबर 204) - पहली मंजिल (कार्डियोलॉजी विभाग)"
+              : "Cabinet 2 (Room 204) - 1st Floor (Cardiology / Clinical Wing)"}
+          </p>
+          <p className="text-xs text-slate-700 leading-relaxed font-medium">
+            {lang === "hi"
+              ? "लिफ्ट 'A' या सीढ़ियों से पहली मंजिल पर जाएं ➔ गलियारे में बाईं ओर मुड़ें ➔ कैबिनेट 2 के बाहर कमरा नंबर 204 पहुंचे।"
+              : "Take Elevator A or Stairs to the 1st Floor ➔ Turn Left at the corridor ➔ Proceed to Room 204 outside Cabinet 2."}
+          </p>
+        </div>
+
         {/* WhatsApp Badge */}
         <div className="w-full p-3 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center gap-2 text-xs font-semibold text-teal-800">
           <span>✅ {lang === "hi" ? "WhatsApp और SMS टोकन अलर्ट भेजे गए" : "WhatsApp & SMS Token Alerts Sent"}</span>
         </div>
 
-        {/* Reset Button */}
-        <button
-          onClick={onReset}
-          className="w-full py-4 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-base shadow-lg shadow-teal-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <RotateCcw size={18} />
-          <span>{lang === "hi" ? "नया पंजीकरण शुरू करें" : "Start New Registration"}</span>
-        </button>
+        {/* Action Buttons: Doctor Dashboard & Reset */}
+        <div className="w-full flex flex-col gap-3">
+          <button
+            onClick={onOpenDashboard}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-teal-700 to-teal-800 hover:from-teal-800 hover:to-teal-900 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>👨‍⚕️ {lang === "hi" ? "डॉक्टर डैशबोर्ड देखें →" : "Open Doctor Dashboard →"}</span>
+          </button>
+
+          <button
+            onClick={onReset}
+            className="w-full py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <RotateCcw size={16} />
+            <span>{lang === "hi" ? "नया पंजीकरण शुरू करें" : "Start New Registration"}</span>
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* =========================================================================
+   PHASE 6 — DOCTOR CLINICAL WORKSTATION DASHBOARD
+   ========================================================================= */
+function DoctorDashboardStage({
+  lang,
+  patient,
+  symptomsText,
+  triage,
+  doctor,
+  tokenNum,
+  onReturnToKiosk,
+}: {
+  lang: Lang;
+  patient: PatientInfo;
+  symptomsText: string;
+  triage: TriageResult;
+  doctor: Doctor;
+  tokenNum: string;
+  onReturnToKiosk: () => void;
+}) {
+  const [called, setCalled] = useState(false);
+  const [rxNotes, setRxNotes] = useState("");
+  const [completed, setCompleted] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -30 }}
+      transition={{ duration: 0.5 }}
+      className="w-full max-w-4xl mx-auto flex flex-col gap-6"
+    >
+      <GlobalBackButton onClick={onReturnToKiosk} label={lang === "hi" ? "वापस कियोस्क / Kiosk" : "Return to Kiosk"} />
+
+      {/* Header */}
+      <div className="bg-white/90 backdrop-blur-md rounded-3xl p-6 shadow-xl border border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-teal-600 text-white text-2xl flex items-center justify-center shadow">
+            👨‍⚕️
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-800">Doctor Clinical Workstation</h2>
+            <p className="text-xs text-slate-500 font-medium">Room 204 &bull; Cabinet 2 &bull; Physician: {doctor.name}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-full bg-teal-100 text-teal-800 text-xs font-extrabold border border-teal-200">
+            Token #{tokenNum}
+          </span>
+          {completed && (
+            <span className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold border border-emerald-200">
+              ✅ Consultation Completed
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left Column: Patient Profile & Speech Transcript */}
+        <div className="flex flex-col gap-6">
+          {/* Patient Demographic Profile Card */}
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 shadow-lg border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+                <User size={18} className="text-teal-600" />
+                <span>Patient Profile</span>
+              </h3>
+              <span className="text-xs font-semibold text-slate-400">Reg: Today</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold mb-0.5">Name / नाम</span>
+                <span className="font-bold text-slate-800">{patient.name || "Guest Patient"}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold mb-0.5">Age / Sex</span>
+                <span className="font-bold text-slate-800">{patient.age || "N/A"} Yrs &bull; {patient.sex || "N/A"}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold mb-0.5">WhatsApp Contact</span>
+                <span className="font-bold text-teal-700">{patient.phone || "N/A"}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold mb-0.5">Emergency Contact</span>
+                <span className="font-bold text-red-600">{patient.emergency || "N/A"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Patient Reported Symptoms Quote */}
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 shadow-lg border border-slate-100 space-y-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Mic size={15} className="text-teal-600" />
+              <span>Exact Voice Speech Transcript</span>
+            </span>
+            <blockquote className="p-4 rounded-2xl bg-teal-50/70 border-l-4 border-teal-600 text-slate-800 text-xs sm:text-sm italic font-medium leading-relaxed shadow-xs">
+              "{symptomsText || "No voice transcript recorded."}"
+            </blockquote>
+          </div>
+        </div>
+
+        {/* Right Column: AI Triage & Doctor Action Panel */}
+        <div className="flex flex-col gap-6">
+          {/* AI Clinical Triage & Differential Assessment */}
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 shadow-lg border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+                <ShieldCheck size={18} className="text-teal-600" />
+                <span>AI Clinical Triage</span>
+              </h3>
+              <span className="px-3 py-1 rounded-full bg-teal-100 text-teal-800 text-xs font-extrabold">
+                {triage.department}
+              </span>
+            </div>
+
+            <div className="space-y-3 text-xs sm:text-sm">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Clinical Insight Summary
+                </span>
+                <p className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-slate-700 text-xs leading-relaxed font-medium">
+                  {triage.clinical_summary || triage.summary}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Possible Conditions Evaluated
+                </span>
+                <div className="flex flex-col gap-2">
+                  {(triage.possible_conditions || triage.differential_factors || []).map((cond, idx) => (
+                    <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-800 font-medium shadow-xs">
+                      <div className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0 animate-pulse" />
+                      <span>{cond}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Doctor Action Panel */}
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 shadow-lg border border-slate-100 space-y-4">
+            <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+              <Stethoscope size={18} className="text-teal-600" />
+              <span>Doctor Action Panel</span>
+            </h3>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setCalled(true)}
+                disabled={called}
+                className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-75 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow cursor-pointer"
+              >
+                <span>{called ? "📢 Patient Called to Room 204" : "📢 Call Patient to Room 204"}</span>
+              </button>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Clinical Notes &amp; Digital Prescription (Rx)
+                </label>
+                <textarea
+                  rows={3}
+                  value={rxNotes}
+                  onChange={(e) => setRxNotes(e.target.value)}
+                  placeholder="Enter clinical observations, diagnosis, prescribed medicines..."
+                  className="w-full p-3.5 rounded-2xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-400 text-xs text-slate-800 placeholder:text-slate-400 resize-none shadow-xs"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCompleted(true)}
+                  className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow cursor-pointer"
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Complete Consultation</span>
+                </button>
+                <button
+                  onClick={onReturnToKiosk}
+                  className="py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw size={14} />
+                  <span>Return Kiosk</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </motion.div>
   );
@@ -1417,6 +1645,8 @@ export default function Page() {
     name: "", age: "", sex: "", phone: "", emergency: "", date: "",
   });
 
+  const [symptomsText, setSymptomsText] = useState<string>("");
+
   const [triage, setTriage]       = useState<TriageResult>({
     department: "General Physician",
     severity: "Green",
@@ -1425,7 +1655,7 @@ export default function Page() {
 
   const [selectMode, setSelectMode] = useState<SelectMode>("ai");
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor>(MOCK_DOCTORS[0]);
-  const [tokenNum, setTokenNum]   = useState<string>("MED-4821");
+  const [tokenNum, setTokenNum]   = useState<string>("MED-CARD-104");
 
   const handleLangSelect = useCallback((l: Lang) => {
     setLang(l);
@@ -1444,6 +1674,7 @@ export default function Page() {
 
   const handleAnalyzeSymptoms = useCallback(async (symptoms: string) => {
     const cleanedSymptoms = cleanTranscript(symptoms);
+    setSymptomsText(cleanedSymptoms);
     try {
       const res = await fetch("/api/triage", {
         method: "POST",
@@ -1514,7 +1745,7 @@ export default function Page() {
           <LanguageStage key="language" onSelect={handleLangSelect} onReplay={handleReplayIntro} />
         )}
 
-        {/* COMMON FRAME WRAPPER FOR PHASES 3 - 5 */}
+        {/* COMMON FRAME WRAPPER FOR PHASES 3 - 6 */}
         {phase !== "logo" && phase !== "language" && (
           <motion.div key="main-app"
             initial={{ opacity: 0 }}
@@ -1587,7 +1818,22 @@ export default function Page() {
                       doctor={selectedDoctor}
                       tokenNum={tokenNum}
                       onReset={handleResetAll}
+                      onOpenDashboard={() => setPhase("dashboard")}
                       onBack={() => setPhase("doctors")}
+                    />
+                  )}
+
+                  {/* PHASE 6: DOCTOR DASHBOARD */}
+                  {phase === "dashboard" && (
+                    <DoctorDashboardStage
+                      key="dashboard-stage"
+                      lang={lang}
+                      patient={patient}
+                      symptomsText={symptomsText}
+                      triage={triage}
+                      doctor={selectedDoctor}
+                      tokenNum={tokenNum}
+                      onReturnToKiosk={() => setPhase("language")}
                     />
                   )}
                 </AnimatePresence>
