@@ -39,6 +39,7 @@ import {
   blobToBase64,
   cleanDigitsOnly,
   extractDigitsStrict,
+  sendAudioForTranscription,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -769,40 +770,24 @@ function FormStage({
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         let success = false;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
 
         try {
-          const audioBase64 = await blobToBase64(audioBlob);
-          const res = await fetch('/api/whisper', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ audioBase64 }),
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.text) {
-              const parsedNumber = extractDigitsStrict(data.text);
-              if (field === "phone") {
-                setPhone(parsedNumber);
-              } else {
-                setEmergency(parsedNumber);
-              }
-              success = true;
+          const rawText = await sendAudioForTranscription(audioBlob);
+          if (rawText) {
+            const parsedNumber = extractDigitsStrict(rawText);
+            if (field === "phone") {
+              setPhone(parsedNumber);
+            } else {
+              setEmergency(parsedNumber);
             }
+            success = true;
           }
         } catch (err) {
-          clearTimeout(timeoutId);
-          console.error('Groq Whisper Base64 Transcription Failed or Timed Out:', err);
+          console.error('Groq Whisper Multipart Transcription Failed:', err);
         }
 
         if (!success) {
-          console.warn('Groq Whisper failed or timed out, instant hard fallback to browser STT');
+          console.warn('Groq Whisper failed or empty, instant fallback to browser STT');
           startProductionVoiceCapture(
             (spokenText) => {
               const digits = extractDigitsStrict(spokenText);

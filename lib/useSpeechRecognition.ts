@@ -18,6 +18,24 @@ declare global {
 let activeRecognitionInstance: any = null;
 let globalLiveStream: MediaStream | null = null;
 
+export const sendAudioForTranscription = async (blob: Blob): Promise<string> => {
+  const formData = new FormData();
+  formData.append('audio', blob, 'recording.webm');
+
+  const res = await fetch('/api/whisper', {
+    method: 'POST',
+    body: formData, // Browser automatically sets correct boundary headers
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.error || `Transcription failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return data.text ?? '';
+};
+
 export const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
