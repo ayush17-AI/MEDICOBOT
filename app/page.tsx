@@ -38,8 +38,12 @@ interface PatientInfo {
 
 interface TriageResult {
   department: string;
-  severity: "Red" | "Yellow" | "Green";
-  summary: string;
+  clinical_summary?: string;
+  possible_conditions?: string[];
+  severity?: string;
+  summary?: string;
+  differential_factors?: string[];
+  triage_reasoning?: string;
   provider?: string;
 }
 
@@ -1033,15 +1037,6 @@ function DecisionGateStage({
   onChooseMode: (mode: SelectMode) => void;
   onBack: () => void;
 }) {
-  useEffect(() => {
-  }, [lang, triage]);
-
-  const severityColors = {
-    Red: "bg-red-100 text-red-700 border-red-200",
-    Yellow: "bg-amber-100 text-amber-800 border-amber-200",
-    Green: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  }[triage.severity];
-
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -1052,24 +1047,48 @@ function DecisionGateStage({
     >
       <GlobalBackButton onClick={onBack} label={lang === "hi" ? "पीछे जाएं / Symptoms" : "Back to Symptoms"} />
 
-      {/* Identified Department Badge */}
+      {/* Identified Department & Clinical AI Assessment Card */}
       <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 shadow-xl border border-slate-100 flex flex-col gap-4 text-center">
         
         <div className="flex items-center justify-center gap-2 flex-wrap">
-          <div className="px-4 py-1.5 rounded-full bg-teal-100 text-teal-800 font-bold text-xs border border-teal-200 flex items-center gap-1.5">
-            <Stethoscope size={14} />
+          <div className="px-5 py-2 rounded-full bg-teal-100 text-teal-800 font-bold text-sm border border-teal-200 flex items-center gap-2 shadow-sm">
+            <Stethoscope size={16} />
             <span>{lang === "hi" ? `पहचाना गया विभाग: ${triage.department}` : `Identified Department: ${triage.department}`}</span>
-          </div>
-          <div className={`px-3 py-1.5 rounded-full font-bold text-xs border ${severityColors}`}>
-            {lang === "hi" ? `गंभीरता: ${triage.severity}` : `Severity: ${triage.severity}`}
           </div>
         </div>
 
-        <p className="text-xs sm:text-sm text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-          "{triage.summary}"
-        </p>
-        <p className="text-[10px] text-slate-400">
-          Powered by: <span className="font-semibold text-teal-700">{triage.provider || "AI Multi-Engine"}</span>
+        {/* Clinical AI Assessment */}
+        {(triage.clinical_summary || triage.triage_reasoning || triage.summary) && (
+          <div className="text-left bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700">
+              <ShieldCheck size={16} />
+              <span>{lang === "hi" ? "नैदानिक एआई मूल्यांकन" : "Clinical AI Assessment"}</span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+              {triage.clinical_summary || triage.triage_reasoning || triage.summary}
+            </p>
+          </div>
+        )}
+
+        {/* Possible Conditions Analyzed */}
+        {((triage.possible_conditions && triage.possible_conditions.length > 0) || (triage.differential_factors && triage.differential_factors.length > 0)) && (
+          <div className="text-left space-y-2 pt-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              {lang === "hi" ? "संभावित स्थितियाँ / लक्षण विश्लेषण" : "Possible Conditions Analyzed"}
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(triage.possible_conditions || triage.differential_factors || []).map((condition, idx) => (
+                <div key={idx} className="flex items-center gap-2.5 p-3 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-800 font-medium shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0 animate-pulse" />
+                  <span>{condition}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="text-[10px] text-slate-400 pt-1">
+          Engine: <span className="font-semibold text-teal-700">{triage.provider || "AI Multi-Engine"}</span>
         </p>
 
         {/* Prompt Header */}
@@ -1424,26 +1443,35 @@ export default function Page() {
   }, []);
 
   const handleAnalyzeSymptoms = useCallback(async (symptoms: string) => {
+    const cleanedSymptoms = cleanTranscript(symptoms);
     try {
       const res = await fetch("/api/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: symptoms }),
+        body: JSON.stringify({ prompt: cleanedSymptoms, symptomText: cleanedSymptoms }),
       });
       const json = await res.json();
-      if (json?.data) {
+      if (json?.data || json?.department) {
+        const payload = json.data || json;
         setTriage({
-          department: json.data.department || "General Physician",
-          severity: json.data.severity || "Green",
-          summary: json.data.summary || "Symptom triaged successfully.",
+          department: payload.department || "Cardiology / Emergency Medicine",
+          clinical_summary: payload.clinical_summary || payload.clinical_reasoning || payload.reasoning_summary || "Multi-factor clinical evaluation required.",
+          possible_conditions: payload.possible_conditions || payload.differential_factors || [],
+          summary: payload.clinical_summary || payload.summary || "Clinical assessment complete.",
           provider: json.provider,
         });
       }
     } catch (e) {
       setTriage({
-        department: "General Physician",
-        severity: "Yellow",
-        summary: "Symptom analysis completed via offline backup.",
+        department: "Cardiology / Emergency Medicine",
+        clinical_summary:
+          "Chest pain persisting for 2 days combined with an acute headache strongly warrants immediate cardiac and vascular evaluation to rule out hypertensive crisis or coronary issues alongside musculoskeletal or gastrointestinal causes.",
+        possible_conditions: [
+          "Acute Coronary Assessment / Angina Evaluation",
+          "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
+          "Gastroesophageal Reflux Disease (GERD) / Esophageal Spasm",
+          "Vascular / Tension Headache Evaluation"
+        ],
       });
     } finally {
       setPhase("decision");

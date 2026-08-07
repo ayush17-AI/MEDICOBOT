@@ -32,21 +32,23 @@ export function useSpeechRecognition({
   const [noiseAlert, setNoiseAlert]   = useState(false);
 
   const recognitionRef  = useRef<any>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isListeningRef  = useRef<boolean>(false);
   const audioCtxRef     = useRef<AudioContext | null>(null);
   const mediaStreamRef  = useRef<MediaStream | null>(null);
 
-  // Stop listening & cleanup audio nodes
+  // Keep isListeningRef in sync for auto-restart onend loop
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
+  // Stop listening & cleanup audio nodes (ONLY on explicit manual toggle off)
   const stopListening = useCallback(() => {
+    isListeningRef.current = false;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch (e) {}
       recognitionRef.current = null;
-    }
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -59,17 +61,7 @@ export function useSpeechRecognition({
     setIsListening(false);
   }, []);
 
-  const resetSilenceTimer = useCallback(() => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-    }
-    // 2.5-second debounce timer on silence to ignore ambient background noise
-    silenceTimerRef.current = setTimeout(() => {
-      stopListening();
-    }, 2500);
-  }, [stopListening]);
-
-  // Start listening with 150Hz High-Pass Audio DSP & Confidence Gate
+  // Start continuous listening with 150Hz High-Pass Audio DSP & Confidence Gate
   const startListening = useCallback(async () => {
     setNoiseAlert(false);
     if (typeof window === "undefined") return;
@@ -92,7 +84,6 @@ export function useSpeechRecognition({
           audioCtxRef.current = audioCtx;
 
           const source = audioCtx.createMediaStreamSource(stream);
-          // High-pass filter at 150Hz to strip room rumble & low hum
           const highPassFilter = audioCtx.createBiquadFilter();
           highPassFilter.type = "highpass";
           highPassFilter.frequency.setValueAtTime(150, audioCtx.currentTime);
@@ -104,7 +95,7 @@ export function useSpeechRecognition({
       console.warn("Web Audio DSP filter initialization fallback:", e);
     }
 
-    // 2. Initialize Speech Recognition
+    // 2. Initialize Speech Recognition with continuous = true
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRec) {
       alert("Speech recognition is not supported in this browser. Please type text manually.");
@@ -114,15 +105,11 @@ export function useSpeechRecognition({
     try {
       const recognition = new SpeechRec();
       recognitionRef.current = recognition;
-      recognition.continuous = false;
+      recognition.continuous = true; // PERSISTENT CONTINUOUS LISTENING
       recognition.interimResults = true;
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
-      resetSilenceTimer();
-
       recognition.onresult = (event: any) => {
-        resetSilenceTimer();
-
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
 
@@ -154,20 +141,28 @@ export function useSpeechRecognition({
         }
       };
 
-      recognition.onerror = () => {
-        stopListening();
+      recognition.onerror = (e: any) => {
+        console.warn("Speech recognition error:", e?.error);
       };
 
+      // AUTO-RESTART LOOP: Keep listening continuously until user manually turns mic off
       recognition.onend = () => {
-        stopListening();
+        if (isListeningRef.current) {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.log("Re-initiating speech recognition loop...");
+          }
+        }
       };
 
       recognition.start();
+      isListeningRef.current = true;
       setIsListening(true);
     } catch (e) {
       stopListening();
     }
-  }, [lang, stopListening, resetSilenceTimer, onTranscript, onNoiseDetected]);
+  }, [lang, stopListening, onTranscript, onNoiseDetected]);
 
   useEffect(() => {
     return () => {

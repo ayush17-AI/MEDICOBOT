@@ -2,16 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export type Department = "Cardiology" | "Gastroenterology" | "General Physician" | "Neurology" | "Orthopedics" | "Pulmonology" | "ENT" | "Pediatrics";
-export type Severity = "Red" | "Yellow" | "Green" | "Red (Emergency)" | "Yellow (Urgent)" | "Green (Standard)";
-
 export interface TriageResult {
   department: string;
-  severity: string;
-  differential_factors?: string[];
-  clinical_reasoning?: string;
-  reasoning_summary?: string;
-  summary?: string;
+  clinical_summary: string;
+  possible_conditions: string[];
   provider: string;
 }
 
@@ -22,44 +16,30 @@ interface TriageRequestBody {
   lang?: "en" | "hi";
 }
 
-const VALID_DEPARTMENTS: Department[] = [
-  "Cardiology",
-  "Gastroenterology",
-  "General Physician",
-  "Neurology",
-  "Orthopedics",
-];
-const VALID_SEVERITIES: Severity[] = ["Red", "Yellow", "Green", "Red (Emergency)", "Yellow (Urgent)", "Green (Standard)"];
+const SYSTEM_PROMPT = `You are MEDICOBOT Clinical AI Triage Engine, trained on emergency medical protocols.
 
-const SYSTEM_PROMPT = `You are a Senior Emergency & Clinical Triage Specialist. Analyze the patient's symptoms thoroughly.
+ANALYZE SYMPTOMS WITH DEEP CLINICAL INTELLIGENCE:
+1. Department Mapping: Assign the most critical specialty department based on symptoms (e.g., Chest pain + Headache = Cardiology / Emergency Medicine / Neurology).
+2. DO NOT include any severity scores (Green/Red/Yellow).
+3. Identify 3-4 clinical "Possible Causes / Differential Conditions" considering all factors (e.g., Angina / Ischemic Cardiac Evaluation, Hypertensive Crisis, Migraine/Tension Headache with Stress, Gastroesophageal Acid Reflux).
+4. Provide a highly professional, 2-sentence Clinical Reasoning Summary explaining why these symptoms require this specialist.
 
-STRICT MEDICAL TRIAGE RULES:
-1. ACCURATE SEVERITY & DEPARTMENT:
-   - "Chest pain" (especially lasting 2 days or associated with pressure, tightness, or discomfort) IS NEVER A ROUTINE CHECKUP OR SEVERITY GREEN. It MUST be mapped to "Cardiology" or "Emergency / Internal Medicine" with Severity "Red (Emergency)" or "Yellow (Urgent)".
-   - Other RED flags: Shortness of breath, severe head trauma, acute paralysis, uncontrollable bleeding.
-
-2. MULTI-FACTOR DIFFERENTIAL ANALYSIS:
-   - Provide a comprehensive multi-factor breakdown of potential root causes (e.g., Cardiac risk evaluation required, Gastrointestinal Acid Reflux/Esophageal Spasm, Musculoskeletal chest wall injury, Respiratory evaluation).
-
-3. NO PREMATURE SINGLE DIAGNOSIS:
-   - Do NOT say "You have a Heart Attack". State that multi-factor clinical evaluation is required.
-
-REQUIRED JSON FORMAT:
+REQUIRED JSON OUTPUT FORMAT:
 {
-  "department": "Cardiology",
-  "severity": "Red",
-  "reasoning_summary": "Chest pain persisting for 2 days requires immediate clinical evaluation to rule out cardiac acute coronary syndrome alongside gastrointestinal or musculoskeletal causes.",
-  "differential_factors": [
-    "Cardiac Evaluation (Rule out Acute Coronary Syndrome)",
-    "Gastrointestinal Reflux / Esophageal Spasm",
-    "Musculoskeletal Chest Wall Strain"
+  "department": "Cardiology / Emergency Medicine",
+  "clinical_summary": "Chest pain persisting for 2 days combined with an acute headache strongly warrants immediate cardiac and vascular evaluation to rule out hypertensive crisis or coronary issues alongside musculoskeletal or gastrointestinal causes.",
+  "possible_conditions": [
+    "Acute Coronary Assessment / Angina Evaluation",
+    "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
+    "Gastroesophageal Reflux Disease (GERD) / Esophageal Spasm",
+    "Tension / Vascular Headache"
   ]
 }`;
 
 function buildUserPrompt(body: TriageRequestBody): string {
   return `Patient age: ${body.age ?? "unknown"}
 Patient sex: ${body.sex ?? "unknown"}
-Reported symptoms (patient's own words, possibly transcribed via voice, language=${body.lang ?? "en"}):
+Reported symptoms (patient's own words, language=${body.lang ?? "en"}):
 "${body.symptomText}"
 
 Return the JSON triage object now.`;
@@ -74,26 +54,31 @@ function extractJson(raw: string): unknown {
 
 function coerceResult(parsed: unknown): Omit<TriageResult, "provider"> {
   const p = parsed as Record<string, unknown>;
-  const department = VALID_DEPARTMENTS.includes(p.department as Department)
-    ? (p.department as Department)
-    : "Cardiology";
-  const severity = VALID_SEVERITIES.includes(p.severity as Severity) ? (p.severity as Severity) : "Red";
-  const differential_factors = Array.isArray(p.differential_factors)
-    ? (p.differential_factors as unknown[]).map(String).slice(0, 6)
-    : ["Cardiac Evaluation Required", "Gastrointestinal Reflux", "Musculoskeletal Strain"];
-  const reasoning_summary =
-    typeof p.reasoning_summary === "string"
+  const department = typeof p.department === "string" ? p.department : "Cardiology / Emergency Medicine";
+  const clinical_summary =
+    typeof p.clinical_summary === "string"
+      ? p.clinical_summary
+      : typeof p.reasoning_summary === "string"
       ? p.reasoning_summary
       : typeof p.clinical_reasoning === "string"
       ? p.clinical_reasoning
-      : "Immediate clinical evaluation assigned based on reported symptoms.";
+      : "Immediate clinical evaluation assigned based on multi-system symptom presentation.";
+  
+  const possible_conditions = Array.isArray(p.possible_conditions)
+    ? (p.possible_conditions as unknown[]).map(String).slice(0, 5)
+    : Array.isArray(p.differential_factors)
+    ? (p.differential_factors as unknown[]).map(String).slice(0, 5)
+    : [
+        "Acute Coronary Assessment / Angina Evaluation",
+        "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
+        "Gastroesophageal Reflux Disease (GERD) / Esophageal Spasm",
+        "Vascular / Tension Headache Evaluation"
+      ];
 
   return {
     department,
-    severity,
-    differential_factors,
-    clinical_reasoning: reasoning_summary,
-    reasoning_summary,
+    clinical_summary,
+    possible_conditions,
   };
 }
 
@@ -151,40 +136,41 @@ async function tryOpenAI(userPrompt: string): Promise<Omit<TriageResult, "provid
 
 function offlineMock(body: TriageRequestBody & { prompt?: string }): Omit<TriageResult, "provider"> {
   const text = (body.prompt || body.symptomText || "").toLowerCase();
-  if (/chest|breath|heart/.test(text)) {
+  if (/chest|breath|heart|headache/.test(text)) {
     return {
-      department: "Cardiology",
-      severity: "Red",
-      differential_factors: [
-        "Cardiac Evaluation (Rule out Acute Coronary Syndrome)",
-        "Gastrointestinal Reflux / Esophageal Spasm",
-        "Musculoskeletal Chest Wall Strain",
+      department: "Cardiology / Emergency Medicine",
+      clinical_summary:
+        "Chest pain persisting for 2 days combined with headache symptoms strongly warrants immediate cardiac and vascular evaluation to rule out hypertensive crisis or coronary issues alongside musculoskeletal or gastrointestinal causes.",
+      possible_conditions: [
+        "Acute Coronary Assessment / Angina Evaluation",
+        "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
+        "Gastroesophageal Reflux Disease (GERD) / Esophageal Spasm",
+        "Vascular / Tension Headache Evaluation"
       ],
-      clinical_reasoning:
-        "Chest pain persisting for 2 days requires immediate clinical evaluation to rule out cardiac acute coronary syndrome alongside gastrointestinal or musculoskeletal causes.",
-      reasoning_summary:
-        "Chest pain persisting for 2 days requires immediate clinical evaluation to rule out cardiac acute coronary syndrome alongside gastrointestinal or musculoskeletal causes.",
     };
   }
   if (/stomach|abdomen|nausea|vomit/.test(text)) {
     return {
       department: "Gastroenterology",
-      severity: "Yellow",
-      differential_factors: ["Gastritis / Indigestion", "Food Intolerance", "Abdominal Wall Strain"],
-      clinical_reasoning:
-        "Reported abdominal symptoms warrant urgent gastroenterology consultation for comprehensive evaluation.",
-      reasoning_summary:
-        "Reported abdominal symptoms warrant urgent gastroenterology consultation for comprehensive evaluation.",
+      clinical_summary:
+        "Reported abdominal distress and associated symptoms warrant a gastroenterology evaluation to assess digestive inflammation, acid reflux, or food sensitivity.",
+      possible_conditions: [
+        "Acute Gastritis / Indigestion",
+        "Gastroesophageal Reflux",
+        "Abdominal Wall Strain / Intestinal Irritation",
+        "Mild Viral Gastroenteritis"
+      ],
     };
   }
   return {
     department: "General Physician",
-    severity: "Green",
-    differential_factors: ["Common Viral Illness", "Fatigue / Lifestyle Factors", "General Evaluation Required"],
-    clinical_reasoning:
-      "Symptoms described do not indicate acute red-flag risks; standard General Physician consultation is assigned.",
-    reasoning_summary:
-      "Symptoms described do not indicate acute red-flag risks; standard General Physician consultation is assigned.",
+    clinical_summary:
+      "Reported symptoms present without immediate single-system red flags. Consultation with a General Physician is assigned for comprehensive physical evaluation.",
+    possible_conditions: [
+      "Common Viral Illness / Systemic Fatigue",
+      "Stress & Tension Related Discomfort",
+      "General Primary Physical Checkup"
+    ],
   };
 }
 
