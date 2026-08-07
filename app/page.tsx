@@ -625,7 +625,7 @@ function MicBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
       whileTap={{ scale:.9 }} whileHover={{ scale:1.08 }}
       className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center
                   shadow-md transition-colors ${
-        active ? "bg-red-500 text-white animate-pulse"
+        active ? "bg-red-500 text-white animate-pulse ring-4 ring-red-300/80 shadow-lg shadow-red-200"
                : "bg-teal-600 text-white hover:bg-teal-700"
       }`}
       aria-label={active ? "Stop recording" : "Speak"}>

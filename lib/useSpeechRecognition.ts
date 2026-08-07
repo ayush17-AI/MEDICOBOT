@@ -10,6 +10,77 @@ export interface SpeechRecognitionOptions {
 
 // Module-level global reference for active speech recognition instance across component remounts & field switches
 let activeRecognitionInstance: any = null;
+let globalLiveStream: MediaStream | null = null;
+
+export const initializeProductionMic = async (): Promise<MediaStream | null> => {
+  try {
+    if (typeof window === "undefined") return null;
+    if (!globalLiveStream || !globalLiveStream.active) {
+      globalLiveStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+    }
+    return globalLiveStream;
+  } catch (err) {
+    console.error("HTTPS Mic Access Error:", err);
+    return null;
+  }
+};
+
+export const startProductionVoiceCapture = async (
+  onResult: (text: string) => void,
+  onEndCallback: () => void,
+  lang: string = "en-US"
+) => {
+  const stream = await initializeProductionMic();
+  if (!stream) {
+    alert("Microphone permission blocked. Please allow mic access in your browser URL bar.");
+    return null;
+  }
+
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+
+  const recognition = new SpeechRecognition();
+  // HTTPS fix: single-shot per utterance with rapid restart on end
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = lang;
+
+  let finalTranscript = "";
+
+  recognition.onresult = (event: any) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interim += event.results[i][0].transcript;
+      }
+    }
+    onResult(finalTranscript || interim);
+  };
+
+  recognition.onerror = (event: any) => {
+    console.warn("Production STT Event Notice:", event.error);
+  };
+
+  recognition.onend = () => {
+    onEndCallback();
+  };
+
+  try {
+    recognition.start();
+  } catch (e) {
+    console.error("STT Start Error:", e);
+  }
+
+  return recognition;
+};
 
 export const stopVoiceSession = () => {
   if (activeRecognitionInstance) {
@@ -32,6 +103,9 @@ export const ensureAudioContextActive = async (audioCtx: AudioContext) => {
 };
 
 export const getProductionAudioStream = async (): Promise<MediaStream> => {
+  const liveStream = await initializeProductionMic();
+  if (liveStream) return liveStream;
+
   try {
     return await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -167,8 +241,7 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
     }
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
+      // Keep persistent audio stream alive for HTTPS session continuity
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
       audioCtxRef.current.close().catch(() => {});
@@ -189,8 +262,9 @@ export function useSpeechRecognition({
     isListeningRef.current = true;
     setIsListening(true);
 
-    // 1. Initialize Web Audio API DSP Filter Node (85Hz High-Pass & 3400Hz Low-Pass)
+    // 1. Pre-warm production mic & Initialize Web Audio API DSP Filter Node
     try {
+      await initializeProductionMic();
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function") {
         const stream = await getProductionAudioStream();
         mediaStreamRef.current = stream;
@@ -223,7 +297,7 @@ export function useSpeechRecognition({
       console.warn("Web Audio DSP filter initialization fallback:", e);
     }
 
-    // 2. Initialize Speech Recognition with continuous = true
+    // 2. Initialize Speech Recognition with continuous = false for production HTTPS safe stream restart
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRec) {
       alert("Speech recognition is not supported in this browser. Please type text manually.");
@@ -236,7 +310,7 @@ export function useSpeechRecognition({
       const recognition = new SpeechRec();
       recognitionRef.current = recognition;
       activeRecognitionInstance = recognition;
-      recognition.continuous = true; // PERSISTENT CONTINUOUS LISTENING
+      recognition.continuous = false; // PRODUCTION HTTPS SAFE MODE
       recognition.interimResults = true;
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
@@ -262,7 +336,6 @@ export function useSpeechRecognition({
         if (currentCombined) {
           const cleaned = cleanTranscript(currentCombined);
           if (cleaned) {
-            // SET CLEANED RESULT DIRECTLY (PREVENTS INTERIM SELF-CONCATENATION LOOPS)
             setTranscript(cleaned);
             if (onTranscript) onTranscript(cleaned);
             setNoiseAlert(false);
@@ -282,7 +355,7 @@ export function useSpeechRecognition({
         }
       };
 
-      // AGGRESSIVE AUTO-RESTART KEEP-ALIVE LOOP
+      // SEAMLESS RAPID RESTART LOOP ON END IF MIC STILL ACTIVE
       recognition.onend = () => {
         if (isListeningRef.current) {
           try {
