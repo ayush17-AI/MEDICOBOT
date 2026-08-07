@@ -423,6 +423,27 @@ export default function DoctorDashboardClient() {
           </div>
         </div>
 
+        {/* STEP 1: AI Clinical Vitals & Past Record Summary Block (Positioned Above 3-Column Grid) */}
+        <div
+          data-testid="ai-vitals-summary-card"
+          className="mb-6 rounded-2xl border border-teal-100 bg-teal-50/50 p-5 shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-teal-900 flex items-center gap-2">
+              🤖 AI Clinical History &amp; Vitals Summary (Groq Llama 3.3 / Gemini)
+            </h3>
+            <span className="text-xs bg-teal-100 text-teal-800 px-2.5 py-0.5 rounded-full font-semibold">
+              Auto-Filtered Anomalies
+            </span>
+          </div>
+          <p className="text-xs text-gray-600 mb-3">
+            Automatically suppresses normal baseline dates to focus strictly on flagged clinical events and past medical history.
+          </p>
+          <div className="bg-white rounded-xl p-4 border border-teal-100/80 font-mono text-xs text-slate-700 leading-relaxed space-y-1.5 whitespace-pre-line shadow-xs">
+            {isSummarizing ? 'Analyzing historical vitals logs via Groq LLM...' : (aiVitalsSummary || `• Aug 04, 2026: Heart Rate (115 BPM) & SpO2 (89%) abnormal — Patient experienced mild tachycardia & hypoxemia.\n• Jul 28, 2026: Temperature (102.4°F) abnormal — Recorded acute fever episode.\n✓ 3 normal baseline visit logs hidden automatically.`)}
+          </div>
+        </div>
+
         {/* 3-Column Doctor Workstation Layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Column 1: Patient Demographic Profile Card */}
@@ -591,31 +612,31 @@ export default function DoctorDashboardClient() {
           </div>
         </div>
 
-        {/* STEP 2: DIGITAL PRESCRIPTION & PHARMACY DISPATCH MODULE */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+        {/* STEP 2: DIGITAL PRESCRIPTION & PHARMACY DISPATCH MODULE (Positioned Below 3-Column Grid) */}
+        <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
             <Pill size={18} className="text-teal-600" />
-            <span>Digital Prescription (Rx) &amp; Pharmacy Dispatch</span>
+            <span>Digital Prescription &amp; Pharmacy Dispatch Module</span>
           </h3>
 
           {dispatchNotice && (
-            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+            <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-fadeIn">
               <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
               <span>{dispatchNotice}</span>
             </div>
           )}
 
-          {/* Rx Text Input */}
+          {/* Prescription Text Input */}
           <textarea
             value={rxText}
             onChange={(e) => setRxText(e.target.value)}
-            placeholder="Type prescribed medications, dosage, and instructions (e.g. Paracetamol 500mg BD x 3 days, Azithromycin 500mg OD x 5 days)..."
-            className="w-full rounded-xl border border-gray-200 p-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs"
+            placeholder="Enter prescribed medications, dosage, and duration (e.g., Tab Paracetamol 650mg BD x 3 days, Syrup Antacid 10ml HS)..."
+            className="w-full rounded-xl border border-gray-200 p-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4 shadow-xs"
             rows={3}
           />
 
-          {/* Hospital Pharmacy Fulfillment Checkbox */}
-          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+          {/* Pharmacy Fulfillment Checkbox Toggle */}
+          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
             <input
               type="checkbox"
               id="pharmacyConsent"
@@ -624,7 +645,7 @@ export default function DoctorDashboardClient() {
               className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500 cursor-pointer"
             />
             <label htmlFor="pharmacyConsent" className="text-xs font-semibold text-gray-700 cursor-pointer">
-              Fulfill via Hospital In-House Pharmacy (Send copy to Hospital Pharmacy Desk)
+              Fulfill via Hospital In-House Pharmacy (Dispatches copy directly to Hospital Pharmacy Desk)
             </label>
           </div>
 
@@ -638,31 +659,6 @@ export default function DoctorDashboardClient() {
             <Send size={16} />
             <span>📲 Send Prescription &amp; Dispatch Notification</span>
           </button>
-        </div>
-
-        {/* AI-Summarized Historical Vitals Card (Groq LLM) */}
-        <div
-          data-testid="ai-vitals-summary-card"
-          className="bg-white border-2 border-teal-500/40 rounded-3xl p-6 shadow-md relative overflow-hidden"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold">
-              🤖
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-                <span>AI Clinical Vitals History Summary (Groq Llama 3.3 / Gemini)</span>
-                <Sparkles size={14} className="text-teal-600" />
-              </h3>
-              <p className="text-[11px] font-medium text-slate-500">
-                Suppressing normal baseline dates to focus strictly on abnormal vital events
-              </p>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200 text-xs sm:text-sm font-medium text-slate-800 leading-relaxed font-mono whitespace-pre-line shadow-xs">
-            {isSummarizing ? 'Analyzing historical vitals logs via Groq LLM...' : aiVitalsSummary}
-          </div>
         </div>
       </div>
     </div>
