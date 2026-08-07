@@ -14,9 +14,9 @@ describe("RiskService.evaluate", () => {
     expect(factors[0]).toMatchObject({ parameter: "SpO2", impact: 50 });
   });
 
-  it("scores moderate hypoxia correctly", () => {
+  it("scores hypoxia risk (<92%) correctly", () => {
     const { riskScore } = RiskService.evaluate({ spo2: 90 });
-    expect(riskScore).toBe(25);
+    expect(riskScore).toBe(30);
   });
 
   it("does not score SpO2 at the boundary of normal (93)", () => {
@@ -30,8 +30,8 @@ describe("RiskService.evaluate", () => {
   });
 
   it("scores abnormal HR band correctly", () => {
-    expect(RiskService.evaluate({ heartRate: 110 }).riskScore).toBe(15);
-    expect(RiskService.evaluate({ heartRate: 45 }).riskScore).toBe(15);
+    expect(RiskService.evaluate({ heartRate: 110 }).riskScore).toBe(20);
+    expect(RiskService.evaluate({ heartRate: 45 }).riskScore).toBe(20);
   });
 
   it("scores hypertensive crisis / severe hypotension", () => {
@@ -40,24 +40,36 @@ describe("RiskService.evaluate", () => {
   });
 
   it("scores elevated/low SBP band correctly", () => {
-    expect(RiskService.evaluate({ systolicBP: 150 }).riskScore).toBe(15);
-    expect(RiskService.evaluate({ systolicBP: 85 }).riskScore).toBe(15);
+    expect(RiskService.evaluate({ systolicBP: 150 }).riskScore).toBe(20);
+    expect(RiskService.evaluate({ systolicBP: 85 }).riskScore).toBe(20);
   });
 
-  it("adds 20 points per distinct matched high-risk symptom keyword", () => {
-    const { riskScore, factors } = RiskService.evaluate({
-      symptoms: ["Sudden chest pain", "Shortness of breath since morning"],
-    });
-    expect(riskScore).toBe(40);
-    expect(factors).toHaveLength(2);
+  it("scores high fever (>102°F) correctly", () => {
+    const { riskScore, factors } = RiskService.evaluate({ temperature: 103 });
+    expect(riskScore).toBe(15);
+    expect(factors[0]).toMatchObject({ parameter: "Temperature", impact: 15 });
   });
 
-  it("does not double-count a keyword mentioned in multiple symptom strings", () => {
+  it("triggers 90 point critical override for heart attack", () => {
     const { riskScore, factors } = RiskService.evaluate({
-      symptoms: ["chest pain", "worsening chest pain"],
+      symptomsText: "Patient complaining of severe chest pressure and possible heart attack",
     });
-    expect(riskScore).toBe(20);
-    expect(factors).toHaveLength(1);
+    expect(riskScore).toBe(90);
+    expect(factors[0].reason).toContain("Critical Cardiac");
+  });
+
+  it("triggers 90 point critical override for infarction and breathlessness", () => {
+    const { riskScore } = RiskService.evaluate({
+      symptoms: ["acute myocardial infarction", "severe breathlessness"],
+    });
+    expect(riskScore).toBe(90);
+  });
+
+  it("triggers 90 point critical override for unconscious patient", () => {
+    const { riskScore } = RiskService.evaluate({
+      symptomsText: "Patient is unconscious and unresponsive",
+    });
+    expect(riskScore).toBe(90);
   });
 
   it("caps the total score at 100", () => {
@@ -65,7 +77,7 @@ describe("RiskService.evaluate", () => {
       spo2: 80, // 50
       heartRate: 150, // 30
       systolicBP: 190, // 35
-      symptoms: ["chest pain", "unresponsive"], // 40
+      symptomsText: "heart attack", // 90
     });
     expect(riskScore).toBe(100);
   });
@@ -84,6 +96,7 @@ describe("RiskService.categorize", () => {
     [51, "HIGH"],
     [75, "HIGH"],
     [76, "CRITICAL"],
+    [90, "CRITICAL"],
     [100, "CRITICAL"],
   ] as const)("maps score %i to tier %s", (score, tier) => {
     expect(RiskService.categorize(score)).toBe(tier);
@@ -93,7 +106,7 @@ describe("RiskService.categorize", () => {
 describe("RiskService.computeCompositeTriageIndex", () => {
   it("overrides to 999.0 for CRITICAL category regardless of wait time", () => {
     const enqueuedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const index = RiskService.computeCompositeTriageIndex(80, "CRITICAL", enqueuedAt);
+    const index = RiskService.computeCompositeTriageIndex(90, "CRITICAL", enqueuedAt);
     expect(index).toBe(999.0);
   });
 

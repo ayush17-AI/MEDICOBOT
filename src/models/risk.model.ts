@@ -13,7 +13,9 @@ export interface VitalsInput {
   spo2?: number;
   heartRate?: number;
   systolicBP?: number;
+  temperature?: number;
   symptoms?: string[];
+  symptomsText?: string;
 }
 
 export interface RiskEvaluationRequest {
@@ -25,7 +27,7 @@ export type RiskTier = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
 
 /** A single explainable contribution to the total risk score. */
 export interface RiskFactor {
-  parameter: "SpO2" | "HeartRate" | "SystolicBP" | "Symptom";
+  parameter: "SpO2" | "HeartRate" | "SystolicBP" | "Temperature" | "Symptom";
   impact: number;
   reason: string;
 }

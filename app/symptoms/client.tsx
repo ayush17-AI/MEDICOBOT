@@ -86,6 +86,8 @@ export default function SymptomsClient() {
       let riskResult: any = null;
       try {
         const patientId = patient?.id || patient?.phone || patient?.name || `pt_${Date.now()}`;
+        const rawSymptoms = symptoms.trim();
+        const fullText = `${rawSymptoms} ${triage?.summary || ''} ${triage?.clinical_summary || ''}`.trim();
         const riskRes = await fetch('/api/v1/risk/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -95,7 +97,9 @@ export default function SymptomsClient() {
               spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
               heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
               systolicBP: parseSystolicBP(vitals?.blood_pressure || vitals?.bloodPressure || vitals?.systolicBP),
-              symptoms: [symptoms.trim()],
+              temperature: vitals?.temperature ? Number(vitals.temperature) : undefined,
+              symptoms: [rawSymptoms],
+              symptomsText: fullText,
             },
           }),
         });
@@ -107,11 +111,15 @@ export default function SymptomsClient() {
       }
 
       if (!riskResult) {
+        const rawSymptoms = symptoms.trim();
+        const fullText = `${rawSymptoms} ${triage?.summary || ''} ${triage?.clinical_summary || ''}`.trim();
         const evaluated = RiskService.evaluate({
           spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
           heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
           systolicBP: parseSystolicBP(vitals?.blood_pressure || vitals?.bloodPressure || vitals?.systolicBP),
-          symptoms: [symptoms.trim()],
+          temperature: vitals?.temperature ? Number(vitals.temperature) : undefined,
+          symptoms: [rawSymptoms],
+          symptomsText: fullText,
         });
         const cat = RiskService.categorize(evaluated.riskScore);
         const comp = RiskService.computeCompositeTriageIndex(evaluated.riskScore, cat, new Date().toISOString());

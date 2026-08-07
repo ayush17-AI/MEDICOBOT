@@ -5,19 +5,27 @@ import type {
   VitalsInput,
 } from "@/src/models/risk.model";
 
-/** Critical symptom keywords, matched case-insensitively as substrings
- *  against each entry of `vitals.symptoms`. Each keyword can only
- *  contribute once per evaluation, regardless of how many symptom
- *  strings mention it. */
-const HIGH_RISK_SYMPTOM_KEYWORDS = [
+/** Critical emergency symptom keywords, matched case-insensitively.
+ *  Any match immediately triggers a 90-point symptom score override
+ *  and CRITICAL tier emergency priority (999.0 override). */
+const CRITICAL_KEYWORDS = [
+  "heart attack",
   "chest pain",
+  "myocardial",
+  "infarction",
+  "cardiac",
+  "stroke",
+  "breathlessness",
   "shortness of breath",
+  "unconscious",
+  "severe bleeding",
+  "seizure",
+  "paralysis",
+  "choking",
   "unresponsive",
   "stroke symptoms",
-  "severe bleeding",
 ] as const;
 
-const SYMPTOM_POINTS = 20;
 const QUEUE_AGING_POINTS_PER_10_MIN = 2.5;
 const QUEUE_AGING_CAP = 25;
 const CRITICAL_COMPOSITE_OVERRIDE = 999.0;
@@ -43,7 +51,8 @@ export class RiskService {
     RiskService.scoreSpo2(vitals.spo2, factors);
     RiskService.scoreHeartRate(vitals.heartRate, factors);
     RiskService.scoreSystolicBP(vitals.systolicBP, factors);
-    RiskService.scoreSymptoms(vitals.symptoms, factors);
+    RiskService.scoreTemperature(vitals.temperature, factors);
+    RiskService.scoreSymptoms(vitals.symptoms, vitals.symptomsText, factors);
 
     const totalScore = factors.reduce((sum, f) => sum + f.impact, 0);
     const riskScore = Math.min(100, Math.max(0, totalScore));
@@ -117,11 +126,17 @@ export class RiskService {
         impact: 50,
         reason: `Critical hypoxia detected (SpO2 ${spo2}% < 88%)`,
       });
+    } else if (spo2 < 92) {
+      factors.push({
+        parameter: "SpO2",
+        impact: 30,
+        reason: `Hypoxia risk detected (SpO2 ${spo2}% < 92%)`,
+      });
     } else if (spo2 < 93) {
       factors.push({
         parameter: "SpO2",
         impact: 25,
-        reason: `Moderate hypoxia detected (SpO2 ${spo2}% is between 88% and 93%)`,
+        reason: `Moderate hypoxia detected (SpO2 ${spo2}% is between 92% and 93%)`,
       });
     }
   }
@@ -138,8 +153,8 @@ export class RiskService {
     } else if ((hr > 100 && hr <= 130) || (hr >= 40 && hr < 50)) {
       factors.push({
         parameter: "HeartRate",
-        impact: 15,
-        reason: `Abnormal heart rate detected (HR ${hr} bpm)`,
+        impact: 20,
+        reason: `Arrhythmia / Tachycardia detected (HR ${hr} bpm)`,
       });
     }
   }
@@ -156,26 +171,48 @@ export class RiskService {
     } else if ((sbp >= 140 && sbp < 180) || (sbp > 80 && sbp < 90)) {
       factors.push({
         parameter: "SystolicBP",
-        impact: 15,
-        reason: `Elevated or low systolic blood pressure detected (SBP ${sbp} mmHg)`,
+        impact: 20,
+        reason: `Hypertension / Hypotension detected (SBP ${sbp} mmHg)`,
       });
     }
   }
 
-  private static scoreSymptoms(symptoms: string[] | undefined, factors: RiskFactor[]): void {
-    if (!symptoms || symptoms.length === 0) return;
+  private static scoreTemperature(temp: number | undefined, factors: RiskFactor[]): void {
+    if (temp === undefined || temp === null || Number.isNaN(temp)) return;
 
-    const normalized = symptoms.map((s) => s.toLowerCase());
+    if (temp > 102) {
+      factors.push({
+        parameter: "Temperature",
+        impact: 15,
+        reason: `High fever detected (${temp}°F > 102°F)`,
+      });
+    }
+  }
 
-    for (const keyword of HIGH_RISK_SYMPTOM_KEYWORDS) {
-      const matched = normalized.some((s) => s.includes(keyword));
-      if (matched) {
-        factors.push({
-          parameter: "Symptom",
-          impact: SYMPTOM_POINTS,
-          reason: `High-risk symptom keyword matched: "${keyword}"`,
-        });
-      }
+  private static scoreSymptoms(
+    symptoms: string[] | undefined,
+    symptomsText: string | undefined,
+    factors: RiskFactor[]
+  ): void {
+    const combinedTexts: string[] = [];
+    if (symptoms) combinedTexts.push(...symptoms);
+    if (symptomsText) combinedTexts.push(symptomsText);
+
+    if (combinedTexts.length === 0) return;
+
+    const fullNormalized = combinedTexts.join(" ").toLowerCase();
+
+    // Check for critical keywords
+    const matchedCritical = CRITICAL_KEYWORDS.find((keyword) =>
+      fullNormalized.includes(keyword)
+    );
+
+    if (matchedCritical) {
+      factors.push({
+        parameter: "Symptom",
+        impact: 90,
+        reason: `Red Flag: Critical Cardiac / Emergency Symptoms Identified ("${matchedCritical}")`,
+      });
     }
   }
 }

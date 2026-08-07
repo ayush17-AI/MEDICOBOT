@@ -25,9 +25,13 @@ function sanitizeVitals(raw: unknown): VitalsInput {
     spo2: toFiniteNumber(v.spo2),
     heartRate: toFiniteNumber(v.heartRate),
     systolicBP: toFiniteNumber(v.systolicBP),
+    temperature: toFiniteNumber(v.temperature),
     symptoms: Array.isArray(v.symptoms)
       ? v.symptoms.filter((s): s is string => typeof s === "string")
+      : typeof v.symptoms === "string"
+      ? [v.symptoms]
       : undefined,
+    symptomsText: typeof v.symptomsText === "string" ? v.symptomsText : undefined,
   };
 }
 
