@@ -17,9 +17,9 @@ export default function PatientInfoClient() {
   const router = useRouter();
   const [globalError, setGlobalError] = useState<string | null>(null);
 
-  // Compute 10-day date window (min = today, max = today + 10 days)
-  const todayStr = new Date().toISOString().split('T')[0];
-  const maxDateStr = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Dynamic JavaScript date limits: min = Today (2026-08-08), max = Today + 10 Days (2026-08-18)
+  const today = new Date().toISOString().split('T')[0];
+  const maxDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const {
     register,
@@ -35,7 +35,7 @@ export default function PatientInfoClient() {
       phoneNumber: '',
       emergencyCountryCode: '+91',
       emergencyContact: '',
-      appointmentDate: todayStr,
+      appointmentDate: today,
     },
     mode: 'onTouched',
   });
@@ -60,7 +60,7 @@ export default function PatientInfoClient() {
       emergencyCountryCode: data.emergencyCountryCode,
       emergencyMobile: data.emergencyContact || '',
       emergency: data.emergencyContact ? `${data.emergencyCountryCode} ${data.emergencyContact}` : '',
-      date: data.appointmentDate || todayStr,
+      date: data.appointmentDate || today,
     };
     sessionStorage.setItem('medicobot_patient', JSON.stringify(payload));
     router.push('/vitals-dashboard');
@@ -206,34 +206,30 @@ export default function PatientInfoClient() {
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
               Mobile Number (WhatsApp) <span className="text-red-500 font-black">*</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-1">
-                <select
-                  {...register('countryCode')}
-                  data-testid="country-code-select"
-                  className="w-full px-3 py-3 text-sm rounded-xl font-bold bg-slate-100 border border-slate-300 text-slate-800 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none"
-                >
-                  {Object.entries(COUNTRY_PHONE_CONFIG).map(([code, cfg]) => (
-                    <option key={code} value={code}>
-                      {cfg.flag} {code} ({cfg.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <input
-                  {...register('phoneNumber')}
-                  type="tel"
-                  placeholder={`${currentCountryConfig.digits}-digit number`}
-                  data-testid="phoneNumber-input"
-                  data-invalid={errors.phoneNumber ? 'true' : 'false'}
-                  className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
-                    errors.phoneNumber
-                      ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
-                      : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
-                  }`}
-                />
-              </div>
+            <div className="flex items-center gap-2">
+              <select
+                {...register('countryCode')}
+                data-testid="country-code-select"
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+971">🇦🇪 +971</option>
+                <option value="+61">🇦🇺 +61</option>
+              </select>
+              <input
+                {...register('phoneNumber')}
+                type="tel"
+                placeholder="Phone Number"
+                data-testid="phoneNumber-input"
+                data-invalid={errors.phoneNumber ? 'true' : 'false'}
+                className={`w-full rounded-xl border p-3 text-sm font-medium outline-none transition-all ${
+                  errors.phoneNumber
+                    ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
+                    : 'border-gray-200 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-500'
+                }`}
+              />
             </div>
             {errors.phoneNumber ? (
               <p
@@ -245,8 +241,7 @@ export default function PatientInfoClient() {
               </p>
             ) : (
               <p className="mt-1 text-[11px] font-medium text-slate-500">
-                Requires {currentCountryConfig.digits} digits for{' '}
-                {currentCountryConfig.name} ({selectedCountryCode})
+                Requires {currentCountryConfig.digits} digits for {currentCountryConfig.name} ({selectedCountryCode})
               </p>
             )}
           </div>
@@ -256,34 +251,30 @@ export default function PatientInfoClient() {
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
               Emergency Contact Number <span className="text-slate-400 font-normal">(Optional)</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-1">
-                <select
-                  {...register('emergencyCountryCode')}
-                  data-testid="emergency-country-code-select"
-                  className="w-full px-3 py-3 text-sm rounded-xl font-bold bg-slate-100 border border-slate-300 text-slate-800 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none"
-                >
-                  {Object.entries(COUNTRY_PHONE_CONFIG).map(([code, cfg]) => (
-                    <option key={`em-${code}`} value={code}>
-                      {cfg.flag} {code} ({cfg.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <input
-                  {...register('emergencyContact')}
-                  type="tel"
-                  placeholder={`${currentEmCountryConfig.digits}-digit emergency number`}
-                  data-testid="emergencyContact-input"
-                  data-invalid={errors.emergencyContact ? 'true' : 'false'}
-                  className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
-                    errors.emergencyContact
-                      ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
-                      : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
-                  }`}
-                />
-              </div>
+            <div className="flex items-center gap-2">
+              <select
+                {...register('emergencyCountryCode')}
+                data-testid="emergency-country-code-select"
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+971">🇦🇪 +971</option>
+                <option value="+61">🇦🇺 +61</option>
+              </select>
+              <input
+                {...register('emergencyContact')}
+                type="tel"
+                placeholder="Emergency Contact Number"
+                data-testid="emergencyContact-input"
+                data-invalid={errors.emergencyContact ? 'true' : 'false'}
+                className={`w-full rounded-xl border p-3 text-sm font-medium outline-none transition-all ${
+                  errors.emergencyContact
+                    ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
+                    : 'border-gray-200 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-500'
+                }`}
+              />
             </div>
             {errors.emergencyContact ? (
               <p
@@ -300,24 +291,22 @@ export default function PatientInfoClient() {
             )}
           </div>
 
-          {/* Date of Visit / Appointment - Expanded 10-Day Calendar Picker */}
+          {/* Interactive Calendar Date Picker (Next 10 Days) */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
               Date of Appointment <span className="text-red-500 font-black">*</span>
             </label>
-            <div className="relative">
-              <input
-                {...register('appointmentDate')}
-                type="date"
-                min={todayStr}
-                max={maxDateStr}
-                data-testid="appointment-date-input"
-                className="w-full px-4 py-3 text-sm rounded-xl font-bold bg-white border border-slate-300 text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none"
-              />
-            </div>
+            <input
+              {...register('appointmentDate')}
+              type="date"
+              min={today}
+              max={maxDate}
+              data-testid="appointment-date-input"
+              className="w-full rounded-xl border border-gray-200 p-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-sm bg-white"
+            />
             <p className="mt-1 text-[11px] font-medium text-slate-500 flex items-center gap-1">
               <Calendar size={12} className="text-teal-600" />
-              Allowed visit window: {todayStr} to {maxDateStr} (Next 10 Days)
+              Allowed visit window: {today} to {maxDate} (Next 10 Days)
             </p>
           </div>
 

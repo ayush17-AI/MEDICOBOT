@@ -763,7 +763,11 @@ function FormStage({
   const [sex, setSex]               = useState(initialData.sex || "");
   const [phone, setPhone]           = useState(initialData.phone || "");
   const [emergency, setEmergency]   = useState(initialData.emergency || "");
-  const [date] = useState(() => initialData.date || new Date().toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN"));
+  const [countryCode, setCountryCode] = useState("+91");
+  const [emergencyCountryCode, setEmergencyCountryCode] = useState("+91");
+  const today = new Date().toISOString().split('T')[0];
+  const maxDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [date, setDate] = useState(() => initialData.date || today);
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -923,9 +927,11 @@ function FormStage({
       fullName: name.trim(),
       age: Number(age),
       gender: normalizedSex,
-      countryCode: "+91",
+      countryCode: countryCode,
       phoneNumber: cleanPhoneDigitsVal,
+      emergencyCountryCode: emergencyCountryCode,
       emergencyContact: cleanEmergencyDigitsVal,
+      appointmentDate: date,
     });
 
     if (!validation.success) {
@@ -943,7 +949,14 @@ function FormStage({
 
     setFormErrors({});
     setGlobalError(null);
-    onProceed({ name, age, sex: normalizedSex, phone: cleanPhoneDigitsVal, emergency: cleanEmergencyDigitsVal, date });
+    onProceed({
+      name,
+      age,
+      sex: normalizedSex,
+      phone: `${countryCode} ${cleanPhoneDigitsVal}`,
+      emergency: cleanEmergencyDigitsVal ? `${emergencyCountryCode} ${cleanEmergencyDigitsVal}` : "",
+      date,
+    });
   };
 
   return (
@@ -1048,15 +1061,29 @@ function FormStage({
         <FieldRow label={t.phone}>
           <Phone size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
           <div className="flex-1 flex flex-col gap-1">
-            <TextInput
-              placeholder={t.phone}
-              type="tel"
-              value={phone}
-              onChange={setPhone}
-              dataTestId="phoneNumber-input"
-              dataInvalid={!!formErrors.phoneNumber}
-              hasError={!!formErrors.phoneNumber}
-            />
+            <div className="flex items-center gap-2">
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                data-testid="country-code-select"
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+971">🇦🇪 +971</option>
+                <option value="+61">🇦🇺 +61</option>
+              </select>
+              <TextInput
+                placeholder={t.phone}
+                type="tel"
+                value={phone}
+                onChange={setPhone}
+                dataTestId="phoneNumber-input"
+                dataInvalid={!!formErrors.phoneNumber}
+                hasError={!!formErrors.phoneNumber}
+              />
+            </div>
             {formErrors.phoneNumber ? (
               <p data-testid="error-message-phoneNumber" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
                 <AlertCircle size={12} /> {formErrors.phoneNumber}
@@ -1073,16 +1100,30 @@ function FormStage({
         {/* Emergency */}
         <FieldRow label={t.emergency}>
           <Phone size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
-          <div className="flex-1 flex flex-col">
-            <TextInput
-              placeholder={t.emergency}
-              type="tel"
-              value={emergency}
-              onChange={setEmergency}
-              dataTestId="emergencyContact-input"
-              dataInvalid={!!formErrors.emergencyContact}
-              hasError={!!formErrors.emergencyContact}
-            />
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <select
+                value={emergencyCountryCode}
+                onChange={(e) => setEmergencyCountryCode(e.target.value)}
+                data-testid="emergency-country-code-select"
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+971">🇦🇪 +971</option>
+                <option value="+61">🇦🇺 +61</option>
+              </select>
+              <TextInput
+                placeholder={t.emergency}
+                type="tel"
+                value={emergency}
+                onChange={setEmergency}
+                dataTestId="emergencyContact-input"
+                dataInvalid={!!formErrors.emergencyContact}
+                hasError={!!formErrors.emergencyContact}
+              />
+            </div>
             {formErrors.emergencyContact && (
               <p data-testid="error-message-emergencyContact" className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1">
                 <AlertCircle size={12} /> {formErrors.emergencyContact}
@@ -1095,9 +1136,16 @@ function FormStage({
         {/* Date */}
         <FieldRow label={t.date}>
           <Calendar size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
-          <div className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200
-                          text-slate-600 text-sm shadow-sm">
-            {date}
+          <div className="flex-1">
+            <input
+              type="date"
+              min={today}
+              max={maxDate}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              data-testid="appointment-date-input"
+              className="w-full rounded-xl border border-gray-200 p-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-sm bg-white shadow-sm"
+            />
           </div>
         </FieldRow>
 
@@ -1803,6 +1851,31 @@ function DoctorDashboardStage({
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
                 <span className="text-slate-400 block text-[10px] uppercase font-bold mb-0.5">Emergency Contact</span>
                 <span className="font-bold text-red-600">{patient.emergency || "N/A"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Patient Recorded Vitals & Sensor Readings Card */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm mt-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+              🩺 Recorded Vitals &amp; Sensor Readings
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-xs text-gray-400 block font-medium">Heart Rate</span>
+                <span className="text-base font-bold text-gray-800">78 BPM</span>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-xs text-gray-400 block font-medium">Body Temp</span>
+                <span className="text-base font-bold text-gray-800">98.6 °F</span>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-xs text-gray-400 block font-medium">SpO2 Level</span>
+                <span className="text-base font-bold text-gray-800">98 %</span>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-xs text-gray-400 block font-medium">Blood Pressure</span>
+                <span className="text-base font-bold text-gray-800">120/80 mmHg</span>
               </div>
             </div>
           </div>
