@@ -19,6 +19,9 @@ export function cleanTranscript(text: string): string {
   cleaned = cleaned.replace(/(.{4,})( \1)+/gi, "$1");
   // Remove multi-spaces and trim
   cleaned = cleaned.replace(/\s+/g, " ").trim();
+  if (cleaned.length > 0) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
   return cleaned;
 }
 
@@ -61,7 +64,7 @@ export function useSpeechRecognition({
     setIsListening(false);
   }, []);
 
-  // Start continuous listening with 150Hz High-Pass Audio DSP & Permanent Keep-Alive
+  // Start continuous listening with 85Hz High-Pass & 3400Hz Low-Pass Audio DSP + Permanent Keep-Alive
   const startListening = useCallback(async () => {
     setNoiseAlert(false);
     if (typeof window === "undefined") return;
@@ -70,7 +73,7 @@ export function useSpeechRecognition({
     isListeningRef.current = true;
     setIsListening(true);
 
-    // 1. Initialize Web Audio API DSP Filter Node (150Hz High-Pass)
+    // 1. Initialize Web Audio API DSP Filter Node (85Hz High-Pass & 3400Hz Low-Pass)
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -88,11 +91,19 @@ export function useSpeechRecognition({
           audioCtxRef.current = audioCtx;
 
           const source = audioCtx.createMediaStreamSource(stream);
-          const highPassFilter = audioCtx.createBiquadFilter();
-          highPassFilter.type = "highpass";
-          highPassFilter.frequency.setValueAtTime(150, audioCtx.currentTime);
 
-          source.connect(highPassFilter);
+          // Low-cut filter to eliminate background rumble (85Hz)
+          const highPass = audioCtx.createBiquadFilter();
+          highPass.type = "highpass";
+          highPass.frequency.setValueAtTime(85, audioCtx.currentTime);
+
+          // High-cut filter to attenuate high-frequency chatter (3400Hz)
+          const lowPass = audioCtx.createBiquadFilter();
+          lowPass.type = "lowpass";
+          lowPass.frequency.setValueAtTime(3400, audioCtx.currentTime);
+
+          source.connect(highPass);
+          highPass.connect(lowPass);
         }
       }
     } catch (e) {
@@ -116,12 +127,9 @@ export function useSpeechRecognition({
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
       recognition.onresult = (event: any) => {
+        let fullTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
-
-          // PROCESS FINAL RESULTS ONLY TO ELIMINATE INTERIM STUTTER LOOPS
-          if (!res.isFinal) continue;
-
           const confidence = res[0]?.confidence ?? 1;
 
           // CONFIDENCE GATE: Ignore audio input with confidence < 0.75
@@ -133,23 +141,26 @@ export function useSpeechRecognition({
 
           const raw = res[0]?.transcript;
           if (raw) {
-            const cleaned = cleanTranscript(raw);
-            if (cleaned) {
-              setTranscript((prev) => {
-                const combined = prev ? `${prev} ${cleaned}` : cleaned;
-                const normalized = cleanTranscript(combined);
-                if (onTranscript) onTranscript(normalized);
-                return normalized;
-              });
-              setNoiseAlert(false);
-            }
+            fullTranscript += raw + " ";
+          }
+        }
+
+        if (fullTranscript) {
+          const cleaned = cleanTranscript(fullTranscript);
+          if (cleaned) {
+            setTranscript((prev) => {
+              const combined = prev ? `${prev} ${cleaned}` : cleaned;
+              const normalized = cleanTranscript(combined);
+              if (onTranscript) onTranscript(normalized);
+              return normalized;
+            });
+            setNoiseAlert(false);
           }
         }
       };
 
       recognition.onerror = (e: any) => {
         console.warn("Speech recognition error:", e?.error);
-        // Do not turn off isListeningRef on non-fatal errors; allow onend loop to restart
       };
 
       // AGGRESSIVE AUTO-RESTART KEEP-ALIVE LOOP
@@ -158,7 +169,6 @@ export function useSpeechRecognition({
           try {
             recognition.start();
           } catch (err) {
-            // If instant restart fails due to state transition delay, retry after 100ms
             setTimeout(() => {
               if (isListeningRef.current && recognitionRef.current) {
                 try {

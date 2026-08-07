@@ -683,24 +683,65 @@ function FormStage({
   onBack: () => void;
 }) {
   const t = FORM_COPY[lang];
-  const [mic, setMic]           = useState<string|null>(null);
-  const [name, setName]         = useState(initialData.name || "");
-  const [age, setAge]           = useState(initialData.age || "");
-  const [sex, setSex]           = useState(initialData.sex || "");
-  const [phone, setPhone]       = useState(initialData.phone || "");
-  const [emergency, setEmergency] = useState(initialData.emergency || "");
+  const [activeMic, setActiveMic]   = useState<string | null>(null);
+  const [name, setName]             = useState(initialData.name || "");
+  const [age, setAge]               = useState(initialData.age || "");
+  const [sex, setSex]               = useState(initialData.sex || "");
+  const [phone, setPhone]           = useState(initialData.phone || "");
+  const [emergency, setEmergency]   = useState(initialData.emergency || "");
   const [date] = useState(() => initialData.date || new Date().toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN"));
 
+  const activeMicRef = useRef<string | null>(null);
   useEffect(() => {
-    speakText(
-      lang === "hi" ? "कृपया अपनी जानकारी दर्ज करें" : "Please fill in your personal registration details",
-      lang
-    );
-  }, [lang]);
+    activeMicRef.current = activeMic;
+  }, [activeMic]);
 
-  const toggleMic = (f: string) => setMic((m) => m === f ? null : f);
+  const {
+    startListening,
+    stopListening,
+  } = useSpeechRecognition({
+    lang: lang === "hi" ? "hi" : "en",
+    onTranscript: (spokenText) => {
+      const targetField = activeMicRef.current;
+      if (!spokenText || !targetField) return;
+      const cleaned = cleanTranscript(spokenText);
+
+      if (targetField === "name") {
+        setName(cleaned);
+      } else if (targetField === "age") {
+        const digits = cleaned.replace(/\D/g, "");
+        setAge(digits || cleaned);
+      } else if (targetField === "sex") {
+        const lower = cleaned.toLowerCase();
+        if (lower.includes("female") || lower.includes("महिला") || lower.includes("woman")) {
+          setSex(t.sexOptions[1] || "Female / महिला");
+        } else if (lower.includes("male") || lower.includes("पुरुष") || lower.includes("man")) {
+          setSex(t.sexOptions[0] || "Male / पुरुष");
+        } else {
+          setSex(t.sexOptions[2] || "Other / अन्य");
+        }
+      } else if (targetField === "phone") {
+        const digits = cleaned.replace(/\D/g, "");
+        setPhone(digits || cleaned);
+      } else if (targetField === "emergency") {
+        const digits = cleaned.replace(/\D/g, "");
+        setEmergency(digits || cleaned);
+      }
+    },
+  });
+
+  const toggleMic = (field: string) => {
+    if (activeMic === field) {
+      setActiveMic(null);
+      stopListening();
+    } else {
+      setActiveMic(field);
+      startListening();
+    }
+  };
 
   const handleSubmit = () => {
+    stopListening();
     onProceed({ name, age, sex, phone, emergency, date });
   };
 
@@ -721,13 +762,13 @@ function FormStage({
         <FieldRow label={t.name}>
           <User size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
           <TextInput placeholder={t.name} value={name} onChange={setName} />
-          <MicBtn active={mic==="name"} onClick={() => toggleMic("name")} />
+          <MicBtn active={activeMic==="name"} onClick={() => toggleMic("name")} />
         </FieldRow>
 
         {/* Age */}
         <FieldRow label={t.age}>
           <TextInput placeholder={t.age} type="number" value={age} onChange={setAge} />
-          <MicBtn active={mic==="age"} onClick={() => toggleMic("age")} />
+          <MicBtn active={activeMic==="age"} onClick={() => toggleMic("age")} />
         </FieldRow>
 
         {/* Sex */}
@@ -743,7 +784,7 @@ function FormStage({
               </button>
             ))}
           </div>
-          <MicBtn active={mic==="sex"} onClick={() => toggleMic("sex")} />
+          <MicBtn active={activeMic==="sex"} onClick={() => toggleMic("sex")} />
         </FieldRow>
 
         {/* Phone */}
@@ -755,14 +796,14 @@ function FormStage({
               ✅ {t.whatsapp}
             </span>
           </div>
-          <MicBtn active={mic==="phone"} onClick={() => toggleMic("phone")} />
+          <MicBtn active={activeMic==="phone"} onClick={() => toggleMic("phone")} />
         </FieldRow>
 
         {/* Emergency */}
         <FieldRow label={t.emergency}>
           <Phone size={16} className="text-slate-400 flex-shrink-0 mt-3.5" />
           <TextInput placeholder={t.emergency} type="tel" value={emergency} onChange={setEmergency} />
-          <MicBtn active={mic==="emergency"} onClick={() => toggleMic("emergency")} />
+          <MicBtn active={activeMic==="emergency"} onClick={() => toggleMic("emergency")} />
         </FieldRow>
 
         {/* Date */}
