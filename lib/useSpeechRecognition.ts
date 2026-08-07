@@ -8,11 +8,16 @@ export interface SpeechRecognitionOptions {
   onNoiseDetected?: () => void;
 }
 
-export function normalizeAudioTranscript(text: string): string {
+export function cleanTranscript(text: string): string {
   if (!text) return "";
   // Strip filler words & background speech artifacts
   const fillers = /\b(uh+|um+|ah+|er+|like|you know|hmmm+|haa+|accha+|matlab+)\b/gi;
   let cleaned = text.replace(fillers, " ");
+  // Remove word duplicates (e.g., "I I I am am")
+  cleaned = cleaned.replace(/\b(\w+)( \1\b)+/gi, "$1");
+  // Remove phrase loops (e.g., "chest pain chest pain")
+  cleaned = cleaned.replace(/(.{4,})( \1)+/gi, "$1");
+  // Remove multi-spaces and trim
   cleaned = cleaned.replace(/\s+/g, " ").trim();
   return cleaned;
 }
@@ -120,22 +125,26 @@ export function useSpeechRecognition({
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
+
+          // PROCESS FINAL RESULTS ONLY TO ELIMINATE INTERIM STUTTER LOOPS
+          if (!res.isFinal) continue;
+
           const confidence = res[0]?.confidence ?? 1;
 
           // CONFIDENCE GATE: Ignore audio input with confidence < 0.75
-          if (confidence < 0.75) {
+          if (confidence < 0.75 && confidence > 0) {
             setNoiseAlert(true);
             if (onNoiseDetected) onNoiseDetected();
             continue;
           }
 
-          const raw = res[0].transcript;
+          const raw = res[0]?.transcript;
           if (raw) {
-            const cleaned = normalizeAudioTranscript(raw);
+            const cleaned = cleanTranscript(raw);
             if (cleaned) {
               setTranscript((prev) => {
                 const combined = prev ? `${prev} ${cleaned}` : cleaned;
-                const normalized = normalizeAudioTranscript(combined);
+                const normalized = cleanTranscript(combined);
                 if (onTranscript) onTranscript(normalized);
                 return normalized;
               });

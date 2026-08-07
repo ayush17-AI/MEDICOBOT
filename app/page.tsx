@@ -92,18 +92,10 @@ const MOCK_DOCTORS: Doctor[] = [
 /* =========================================================================
    TTS SYNTHESIS UTILITY
    ========================================================================= */
-function speakText(text: string, lang: Lang) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang === "hi" ? "hi-IN" : "en-US";
-  utterance.rate = 0.95;
-
-  const voices = window.speechSynthesis.getVoices();
-  const match = voices.find((v) => v.lang.startsWith(lang === "hi" ? "hi" : "en"));
-  if (match) utterance.voice = match;
-
-  window.speechSynthesis.speak(utterance);
+function speakText(_text: string, _lang: Lang) {
+  // SILENCE ALL OVERVIEW TTS ANNOUNCEMENTS
+  // Per specification: The ONLY allowed speech in the application is the cute kid voice uttering "Medicobot!" at logo completion.
+  return;
 }
 
 /* =========================================================================
@@ -783,6 +775,23 @@ function FormStage({
   );
 }
 
+/* ---------- Audio Normalization & Phrase Deduplication ---------- */
+function cleanTranscript(text: string): string {
+  if (!text) return "";
+  const fillers = /\b(uh+|um+|ah+|er+|like|you know|hmmm+|haa+|accha+|matlab+)\b/gi;
+  let cleaned = text.replace(fillers, " ");
+  // Remove word duplicates (e.g., "I I I am am")
+  cleaned = cleaned.replace(/\b(\w+)( \1\b)+/gi, "$1");
+  // Remove phrase loops (e.g., "chest pain chest pain")
+  cleaned = cleaned.replace(/(.{4,})( \1)+/gi, "$1");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  return cleaned;
+}
+
+function normalizeAudioTranscript(text: string): string {
+  return cleanTranscript(text);
+}
+
 /* =========================================================================
    PHASE 4A — SYMPTOM INPUT PAGE (STT + NOISE FILTER + TIMEOUT)
    ========================================================================= */
@@ -803,15 +812,6 @@ function SymptomsStage({
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    speakText(
-      lang === "hi"
-        ? "कृपया अपने लक्षण बताएं या टाइप करें"
-        : "Describe your symptoms using the mic or text box",
-      lang
-    );
-  }, [lang]);
-
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
@@ -822,6 +822,16 @@ function SymptomsStage({
     }
     setIsListening(false);
   }, []);
+
+  const resetSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    // 2.5-second debounce timer on silence
+    silenceTimerRef.current = setTimeout(() => {
+      stopListening();
+    }, 2500);
+  }, [stopListening]);
 
   const startListening = useCallback(() => {
     setNoiseAlert(false);
@@ -840,38 +850,35 @@ function SymptomsStage({
       recognition.interimResults = true;
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
-      // 3-second noise / silence detection timer
-      silenceTimerRef.current = setTimeout(() => {
-        setNoiseAlert(true);
-        speakText(
-          lang === "hi"
-            ? "शोर आ रहा है, कृपया माइक के पास बोलें"
-            : "Noise detected. Please speak closer to the mic",
-          lang
-        );
-        stopListening();
-      }, 3000);
+      resetSilenceTimer();
 
       recognition.onresult = (event: any) => {
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = null;
-        }
+        resetSilenceTimer();
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
+
+          // PROCESS FINAL RESULTS ONLY TO ELIMINATE INTERIM STUTTER LOOPS
+          if (!res.isFinal) continue;
+
           const confidence = res[0]?.confidence ?? 1;
 
-          // NOISE FILTER: Ignore low-confidence interim noise
-          if (confidence < 0.6) {
+          // NOISE FILTER: Reject low-confidence interim noise
+          if (confidence < 0.75 && confidence > 0) {
             setNoiseAlert(true);
             continue;
           }
 
-          const transcript = res[0].transcript;
-          if (transcript) {
-            setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
-            setNoiseAlert(false);
+          const rawTranscript = res[0]?.transcript;
+          if (rawTranscript) {
+            const cleaned = cleanTranscript(rawTranscript);
+            if (cleaned) {
+              setText((prev) => {
+                const combined = prev ? `${prev} ${cleaned}` : cleaned;
+                return cleanTranscript(combined);
+              });
+              setNoiseAlert(false);
+            }
           }
         }
       };
@@ -889,7 +896,7 @@ function SymptomsStage({
     } catch (e) {
       stopListening();
     }
-  }, [lang, stopListening]);
+  }, [lang, stopListening, resetSilenceTimer]);
 
   const toggleListen = () => {
     if (isListening) {
@@ -900,12 +907,13 @@ function SymptomsStage({
   };
 
   const handleAnalyze = () => {
-    if (!text.trim()) {
+    const cleanedText = cleanTranscript(text);
+    if (!cleanedText.trim()) {
       alert(lang === "hi" ? "कृपया अपने लक्षण दर्ज करें" : "Please speak or type your symptoms first.");
       return;
     }
     setLoading(true);
-    onAnalyze(text);
+    onAnalyze(cleanedText);
   };
 
   return (
@@ -1026,10 +1034,6 @@ function DecisionGateStage({
   onBack: () => void;
 }) {
   useEffect(() => {
-    const prompt = lang === "hi"
-      ? `विभाग पहचाना गया: ${triage.department}। आप अपने डॉक्टर का चयन कैसे करना चाहते हैं?`
-      : `Identified department: ${triage.department}. How would you like to choose your doctor?`;
-    speakText(prompt, lang);
   }, [lang, triage]);
 
   const severityColors = {
@@ -1168,12 +1172,6 @@ function DoctorsStage({
   const bestMatchDoc = scoredDoctors[0];
 
   useEffect(() => {
-    if (selectMode === "ai" && bestMatchDoc) {
-      const prompt = lang === "hi"
-        ? `मेडिकोबॉट डॉ. ${bestMatchDoc.name} की सिफारिश करता है। अनुमानित प्रतीक्षा समय ${bestMatchDoc.waitTimeMins} मिनट है।`
-        : `MEDICOBOT recommends Dr. ${bestMatchDoc.name}. Estimated wait time is ${bestMatchDoc.waitTimeMins} minutes.`;
-      speakText(prompt, lang);
-    }
   }, [selectMode, bestMatchDoc, lang]);
 
   return (
@@ -1320,10 +1318,6 @@ function ConfirmationStage({
   onBack: () => void;
 }) {
   useEffect(() => {
-    const prompt = lang === "hi"
-      ? `पंजीकरण पूरा हुआ। आपका टोकन नंबर ${tokenNum} है। डॉक्टर ${doctor.name} के साथ समय निश्चित किया गया है।`
-      : `Registration complete. Your token number is ${tokenNum}. Appointment confirmed with Dr. ${doctor.name}.`;
-    speakText(prompt, lang);
   }, [lang, doctor, tokenNum]);
 
   return (

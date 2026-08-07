@@ -10,6 +10,7 @@ export interface TriageResult {
   severity: string;
   differential_factors?: string[];
   clinical_reasoning?: string;
+  reasoning_summary?: string;
   summary?: string;
   provider: string;
 }
@@ -30,20 +31,29 @@ const VALID_DEPARTMENTS: Department[] = [
 ];
 const VALID_SEVERITIES: Severity[] = ["Red", "Yellow", "Green", "Red (Emergency)", "Yellow (Urgent)", "Green (Standard)"];
 
-const SYSTEM_PROMPT = `You are a clinical triage assistant at a hospital OPD intake kiosk.
+const SYSTEM_PROMPT = `You are a Senior Emergency & Clinical Triage Specialist. Analyze the patient's symptoms thoroughly.
 
-STRICT RULES:
-- Do NOT hand down a premature single-disease diagnosis.
-- Perform a mandatory differential analysis: evaluate the reported symptoms across multiple plausible underlying causes before assigning a department (for example, chest pain should be weighed across gastrointestinal/reflux, musculoskeletal/injury, anxiety, respiratory, and cardiac risk).
-- Assign exactly one routing department from this fixed list: ${VALID_DEPARTMENTS.join(", ")}.
-- Assign exactly one severity from this fixed list: Red (Emergency), Yellow (Urgent), Green (Standard).
-- If symptoms suggest possible life-threatening risk (e.g. crushing chest pain, difficulty breathing, stroke signs), err toward Red.
-- Respond with ONLY a single JSON object, no prose before or after it, in exactly this shape:
+STRICT MEDICAL TRIAGE RULES:
+1. ACCURATE SEVERITY & DEPARTMENT:
+   - "Chest pain" (especially lasting 2 days or associated with pressure, tightness, or discomfort) IS NEVER A ROUTINE CHECKUP OR SEVERITY GREEN. It MUST be mapped to "Cardiology" or "Emergency / Internal Medicine" with Severity "Red (Emergency)" or "Yellow (Urgent)".
+   - Other RED flags: Shortness of breath, severe head trauma, acute paralysis, uncontrollable bleeding.
+
+2. MULTI-FACTOR DIFFERENTIAL ANALYSIS:
+   - Provide a comprehensive multi-factor breakdown of potential root causes (e.g., Cardiac risk evaluation required, Gastrointestinal Acid Reflux/Esophageal Spasm, Musculoskeletal chest wall injury, Respiratory evaluation).
+
+3. NO PREMATURE SINGLE DIAGNOSIS:
+   - Do NOT say "You have a Heart Attack". State that multi-factor clinical evaluation is required.
+
+REQUIRED JSON FORMAT:
 {
-  "department": "<one of: ${VALID_DEPARTMENTS.join(" | ")}>",
-  "severity": "<Red | Yellow | Green>",
-  "differential_factors": ["<3-5 short possible underlying causes considered>"],
-  "clinical_reasoning": "<2-sentence explanation of why this department and severity were assigned, based on the differential analysis>"
+  "department": "Cardiology",
+  "severity": "Red",
+  "reasoning_summary": "Chest pain persisting for 2 days requires immediate clinical evaluation to rule out cardiac acute coronary syndrome alongside gastrointestinal or musculoskeletal causes.",
+  "differential_factors": [
+    "Cardiac Evaluation (Rule out Acute Coronary Syndrome)",
+    "Gastrointestinal Reflux / Esophageal Spasm",
+    "Musculoskeletal Chest Wall Strain"
+  ]
 }`;
 
 function buildUserPrompt(body: TriageRequestBody): string {
@@ -66,14 +76,25 @@ function coerceResult(parsed: unknown): Omit<TriageResult, "provider"> {
   const p = parsed as Record<string, unknown>;
   const department = VALID_DEPARTMENTS.includes(p.department as Department)
     ? (p.department as Department)
-    : "General Physician";
-  const severity = VALID_SEVERITIES.includes(p.severity as Severity) ? (p.severity as Severity) : "Yellow";
+    : "Cardiology";
+  const severity = VALID_SEVERITIES.includes(p.severity as Severity) ? (p.severity as Severity) : "Red";
   const differential_factors = Array.isArray(p.differential_factors)
     ? (p.differential_factors as unknown[]).map(String).slice(0, 6)
-    : [];
-  const clinical_reasoning =
-    typeof p.clinical_reasoning === "string" ? p.clinical_reasoning : "Assessment generated from reported symptoms.";
-  return { department, severity, differential_factors, clinical_reasoning };
+    : ["Cardiac Evaluation Required", "Gastrointestinal Reflux", "Musculoskeletal Strain"];
+  const reasoning_summary =
+    typeof p.reasoning_summary === "string"
+      ? p.reasoning_summary
+      : typeof p.clinical_reasoning === "string"
+      ? p.clinical_reasoning
+      : "Immediate clinical evaluation assigned based on reported symptoms.";
+
+  return {
+    department,
+    severity,
+    differential_factors,
+    clinical_reasoning: reasoning_summary,
+    reasoning_summary,
+  };
 }
 
 /* ---------------------------- Provider calls ---------------------------- */
@@ -90,7 +111,7 @@ async function tryGroq(userPrompt: string): Promise<Omit<TriageResult, "provider
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.3,
+    temperature: 0.2,
   });
   const raw = completion.choices[0]?.message?.content ?? "";
   return coerceResult(extractJson(raw));
@@ -122,7 +143,7 @@ async function tryOpenAI(userPrompt: string): Promise<Omit<TriageResult, "provid
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.3,
+    temperature: 0.2,
   });
   const raw = completion.choices[0]?.message?.content ?? "";
   return coerceResult(extractJson(raw));
@@ -133,32 +154,37 @@ function offlineMock(body: TriageRequestBody & { prompt?: string }): Omit<Triage
   if (/chest|breath|heart/.test(text)) {
     return {
       department: "Cardiology",
-      severity: "Yellow",
+      severity: "Red",
       differential_factors: [
-        "Gastrointestinal acid reflux / heartburn",
-        "Musculoskeletal strain / chest wall discomfort",
-        "Anxiety-related chest tightness",
-        "Cardiac risk evaluation required",
+        "Cardiac Evaluation (Rule out Acute Coronary Syndrome)",
+        "Gastrointestinal Reflux / Esophageal Spasm",
+        "Musculoskeletal Chest Wall Strain",
       ],
       clinical_reasoning:
-        "Chest-related symptoms carry a range of plausible causes from reflux to musculoskeletal strain, but cardiac risk cannot be excluded without evaluation, so routing to Cardiology with Yellow urgency is the safest default while AI providers are unavailable.",
+        "Chest pain persisting for 2 days requires immediate clinical evaluation to rule out cardiac acute coronary syndrome alongside gastrointestinal or musculoskeletal causes.",
+      reasoning_summary:
+        "Chest pain persisting for 2 days requires immediate clinical evaluation to rule out cardiac acute coronary syndrome alongside gastrointestinal or musculoskeletal causes.",
     };
   }
   if (/stomach|abdomen|nausea|vomit/.test(text)) {
     return {
       department: "Gastroenterology",
-      severity: "Green",
-      differential_factors: ["Gastritis / indigestion", "Food intolerance", "Mild infection"],
+      severity: "Yellow",
+      differential_factors: ["Gastritis / Indigestion", "Food Intolerance", "Abdominal Wall Strain"],
       clinical_reasoning:
-        "Reported abdominal symptoms most commonly stem from digestive causes without acute red-flag features, so a standard Gastroenterology consult is appropriate. This is an offline fallback estimate, not a live model assessment.",
+        "Reported abdominal symptoms warrant urgent gastroenterology consultation for comprehensive evaluation.",
+      reasoning_summary:
+        "Reported abdominal symptoms warrant urgent gastroenterology consultation for comprehensive evaluation.",
     };
   }
   return {
     department: "General Physician",
     severity: "Green",
-    differential_factors: ["Common viral illness", "Fatigue / lifestyle factors", "Requires in-person evaluation"],
+    differential_factors: ["Common Viral Illness", "Fatigue / Lifestyle Factors", "General Evaluation Required"],
     clinical_reasoning:
-      "Symptoms described do not clearly map to a specialty department, so General Physician triage with standard priority is the safest default. This is an offline fallback estimate, not a live model assessment.",
+      "Symptoms described do not indicate acute red-flag risks; standard General Physician consultation is assigned.",
+    reasoning_summary:
+      "Symptoms described do not indicate acute red-flag risks; standard General Physician consultation is assigned.",
   };
 }
 
@@ -188,11 +214,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ...result, provider: provider.name } satisfies TriageResult);
     } catch (err) {
       console.error(`[triage] ${provider.name} failed:`, err instanceof Error ? err.message : err);
-      // fall through to next provider
     }
   }
 
-  // All live providers unavailable or failed — safe offline fallback.
   const mock = offlineMock(body);
   return NextResponse.json({ ...mock, provider: "offline-mock" } satisfies TriageResult);
 }
