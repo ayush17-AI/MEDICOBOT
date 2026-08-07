@@ -126,7 +126,7 @@ export default function VitalsDashboardClient() {
       console.warn('Supabase sync notice:', err);
     } finally {
       setIsSyncing(false);
-      router.push('/?stage=symptoms');
+      router.push('/symptoms');
     }
   };
 

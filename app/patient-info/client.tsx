@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { User, Phone, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User, Phone, Calendar, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import {
   patientInfoSchema,
   COUNTRY_PHONE_CONFIG,
@@ -16,6 +16,10 @@ type FormValues = z.infer<typeof patientInfoSchema>;
 export default function PatientInfoClient() {
   const router = useRouter();
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  // Compute 10-day date window (min = today, max = today + 10 days)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const maxDateStr = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const {
     register,
@@ -29,14 +33,20 @@ export default function PatientInfoClient() {
       fullName: '',
       countryCode: '+91',
       phoneNumber: '',
+      emergencyCountryCode: '+91',
       emergencyContact: '',
+      appointmentDate: todayStr,
     },
     mode: 'onTouched',
   });
 
   const selectedCountryCode = watch('countryCode') || '+91';
+  const selectedEmCountryCode = watch('emergencyCountryCode') || '+91';
+
   const currentCountryConfig =
     COUNTRY_PHONE_CONFIG[selectedCountryCode] || COUNTRY_PHONE_CONFIG['+91'];
+  const currentEmCountryConfig =
+    COUNTRY_PHONE_CONFIG[selectedEmCountryCode] || COUNTRY_PHONE_CONFIG['+91'];
 
   const onSubmit: SubmitHandler<FormValues> = (data) => {
     setGlobalError(null);
@@ -47,8 +57,10 @@ export default function PatientInfoClient() {
       countryCode: data.countryCode,
       mobile: data.phoneNumber,
       phone: `${data.countryCode} ${data.phoneNumber}`,
-      emergency: data.emergencyContact || '',
-      date: new Date().toISOString().split('T')[0],
+      emergencyCountryCode: data.emergencyCountryCode,
+      emergencyMobile: data.emergencyContact || '',
+      emergency: data.emergencyContact ? `${data.emergencyCountryCode} ${data.emergencyContact}` : '',
+      date: data.appointmentDate || todayStr,
     };
     sessionStorage.setItem('medicobot_patient', JSON.stringify(payload));
     router.push('/vitals-dashboard');
@@ -86,7 +98,7 @@ export default function PatientInfoClient() {
         {globalError && (
           <div
             data-testid="global-warning-banner"
-            className="mb-6 p-4 rounded-2xl bg-red-50 border-2 border-red-500 text-red-800 flex items-start gap-3 shadow-sm"
+            className="mb-6 p-4 rounded-2xl bg-red-50 border-2 border-red-500 text-red-800 flex items-start gap-3 shadow-sm animate-shake"
           >
             <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
             <div className="text-xs sm:text-sm font-bold">{globalError}</div>
@@ -189,10 +201,10 @@ export default function PatientInfoClient() {
             </div>
           </div>
 
-          {/* Country Code & Mobile Number */}
+          {/* Primary Mobile Number with Country Code Dropdown */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Mobile Number <span className="text-red-500 font-black">*</span>
+              Mobile Number (WhatsApp) <span className="text-red-500 font-black">*</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="sm:col-span-1">
@@ -212,7 +224,7 @@ export default function PatientInfoClient() {
                 <input
                   {...register('phoneNumber')}
                   type="tel"
-                  placeholder={`${currentCountryConfig.digits}-digit mobile number`}
+                  placeholder={`${currentCountryConfig.digits}-digit number`}
                   data-testid="phoneNumber-input"
                   data-invalid={errors.phoneNumber ? 'true' : 'false'}
                   className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
@@ -239,27 +251,41 @@ export default function PatientInfoClient() {
             )}
           </div>
 
-          {/* Emergency Contact Number */}
+          {/* Emergency Contact Number with Country Code Dropdown */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
               Emergency Contact Number <span className="text-slate-400 font-normal">(Optional)</span>
             </label>
-            <div className="relative">
-              <Phone size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
-              <input
-                {...register('emergencyContact')}
-                type="tel"
-                placeholder="Emergency contact mobile number"
-                data-testid="emergencyContact-input"
-                data-invalid={errors.emergencyContact ? 'true' : 'false'}
-                className={`w-full pl-10 pr-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
-                  errors.emergencyContact
-                    ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
-                    : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
-                }`}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-1">
+                <select
+                  {...register('emergencyCountryCode')}
+                  data-testid="emergency-country-code-select"
+                  className="w-full px-3 py-3 text-sm rounded-xl font-bold bg-slate-100 border border-slate-300 text-slate-800 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none"
+                >
+                  {Object.entries(COUNTRY_PHONE_CONFIG).map(([code, cfg]) => (
+                    <option key={`em-${code}`} value={code}>
+                      {cfg.flag} {code} ({cfg.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <input
+                  {...register('emergencyContact')}
+                  type="tel"
+                  placeholder={`${currentEmCountryConfig.digits}-digit emergency number`}
+                  data-testid="emergencyContact-input"
+                  data-invalid={errors.emergencyContact ? 'true' : 'false'}
+                  className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
+                    errors.emergencyContact
+                      ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
+                      : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
+                  }`}
+                />
+              </div>
             </div>
-            {errors.emergencyContact && (
+            {errors.emergencyContact ? (
               <p
                 data-testid="error-message-emergencyContact"
                 className="mt-1 text-xs font-bold text-red-600 flex items-center gap-1"
@@ -267,7 +293,32 @@ export default function PatientInfoClient() {
                 <AlertCircle size={12} />
                 {errors.emergencyContact.message as string}
               </p>
+            ) : (
+              <p className="mt-1 text-[11px] font-medium text-slate-500">
+                Optional emergency contact ({currentEmCountryConfig.digits} digits for {selectedEmCountryCode})
+              </p>
             )}
+          </div>
+
+          {/* Date of Visit / Appointment - Expanded 10-Day Calendar Picker */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Date of Appointment <span className="text-red-500 font-black">*</span>
+            </label>
+            <div className="relative">
+              <input
+                {...register('appointmentDate')}
+                type="date"
+                min={todayStr}
+                max={maxDateStr}
+                data-testid="appointment-date-input"
+                className="w-full px-4 py-3 text-sm rounded-xl font-bold bg-white border border-slate-300 text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none"
+              />
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-slate-500 flex items-center gap-1">
+              <Calendar size={12} className="text-teal-600" />
+              Allowed visit window: {todayStr} to {maxDateStr} (Next 10 Days)
+            </p>
           </div>
 
           {/* Submit */}

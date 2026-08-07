@@ -1999,6 +1999,20 @@ export default function Page() {
   const [lang, setLang]           = useState<Lang>("en");
   const [logoKey, setLogoKey]     = useState<number>(0);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const stageParam = params.get("stage");
+      if (stageParam === "symptoms") {
+        try {
+          const cachedP = sessionStorage.getItem("medicobot_patient");
+          if (cachedP) setPatient(JSON.parse(cachedP));
+        } catch (e) {}
+        setPhase("symptoms");
+      }
+    }
+  }, []);
+
   const [patient, setPatient]     = useState<PatientInfo>({
     name: "", age: "", sex: "", phone: "", emergency: "", date: "",
   });

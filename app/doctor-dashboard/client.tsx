@@ -8,6 +8,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   RefreshCcw,
+  Phone,
+  User,
+  Heart,
+  Thermometer,
+  Activity,
+  Gauge,
+  FileText,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -20,12 +27,22 @@ export interface PatientRecord {
   kiosk_data?: {
     age?: string;
     sex?: string;
+    countryCode?: string;
+    emergency?: string;
+    emergencyCountryCode?: string;
+    date?: string;
     vitals?: {
       heart_rate?: number;
       temperature?: number;
       spo2?: number;
       blood_pressure?: string;
       status?: string;
+      evaluated_at?: string;
+    };
+    triage?: {
+      department?: string;
+      summary?: string;
+      clinical_summary?: string;
     };
   };
 }
@@ -36,11 +53,15 @@ const MOCK_RECORDS: PatientRecord[] = [
     created_at: new Date().toISOString(),
     patient_name: 'Rajesh Sharma',
     phone_number: '+91 9876543210',
-    symptoms: 'High fever, severe headache and body pain.',
+    symptoms: 'High fever for 2 days, severe headache and body pain.',
     kiosk_data: {
       age: '42',
       sex: 'Male',
+      countryCode: '+91',
+      emergency: '+91 9876500000',
+      date: '2026-08-08',
       vitals: { heart_rate: 114, temperature: 102.4, spo2: 94, blood_pressure: '142/90', status: 'MILD_ABNORMAL' },
+      triage: { department: 'General Physician', summary: 'Elevated fever with tachycardia symptoms.' },
     },
   },
   {
@@ -52,7 +73,11 @@ const MOCK_RECORDS: PatientRecord[] = [
     kiosk_data: {
       age: '29',
       sex: 'Female',
+      countryCode: '+91',
+      emergency: '+91 9123400000',
+      date: '2026-08-08',
       vitals: { heart_rate: 36, temperature: 108.5, spo2: 48, blood_pressure: '210/125', status: 'ANOMALY_ERROR' },
+      triage: { department: 'Emergency Medicine', summary: 'Critical sensor anomaly detected.' },
     },
   },
   {
@@ -64,7 +89,11 @@ const MOCK_RECORDS: PatientRecord[] = [
     kiosk_data: {
       age: '55',
       sex: 'Male',
+      countryCode: '+1',
+      emergency: '+1 2025559999',
+      date: '2026-08-09',
       vitals: { heart_rate: 72, temperature: 98.6, spo2: 98, blood_pressure: '120/80', status: 'NORMAL' },
+      triage: { department: 'General Physician', summary: 'Normal vitals baseline consultation.' },
     },
   },
 ];
@@ -151,7 +180,7 @@ export default function DoctorDashboardClient() {
                 )}
               </div>
               <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
-                Real-Time Patient Vitals Monitor
+                Consolidated Patient Vitals &amp; Symptoms Sync
               </h1>
             </div>
           </div>
@@ -204,13 +233,17 @@ export default function DoctorDashboardClient() {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {f === 'all' ? `All (${records.length})` : f === 'alert' ? `Alerts (${records.filter(r => isAlertRecord(r.kiosk_data?.vitals?.status) || isMildRecord(r.kiosk_data?.vitals?.status)).length})` : 'Normal'}
+                {f === 'all'
+                  ? `All (${records.length})`
+                  : f === 'alert'
+                  ? `Alerts (${records.filter(r => isAlertRecord(r.kiosk_data?.vitals?.status) || isMildRecord(r.kiosk_data?.vitals?.status)).length})`
+                  : 'Normal'}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Vitals Table */}
+        {/* Consolidated Doctor Dashboard Table */}
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table
@@ -219,20 +252,17 @@ export default function DoctorDashboardClient() {
             >
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <th className="py-4 px-6">Patient</th>
-                  <th className="py-4 px-4">Temp (°F)</th>
-                  <th className="py-4 px-4">Heart Rate</th>
-                  <th className="py-4 px-4">SpO2</th>
-                  <th className="py-4 px-4">BP (mmHg)</th>
-                  <th className="py-4 px-4">Status</th>
-                  <th className="py-4 px-6 text-right">Symptoms</th>
+                  <th className="py-4 px-6">Patient Personal Details</th>
+                  <th className="py-4 px-4">Recorded Vitals</th>
+                  <th className="py-4 px-4">Vitals Status</th>
+                  <th className="py-4 px-6">Reported Symptoms &amp; AI Triage Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {filteredRecords.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={4}
                       className="py-8 text-center text-slate-400 font-semibold"
                     >
                       No matching patient records found.
@@ -257,65 +287,65 @@ export default function DoctorDashboardClient() {
                             : 'hover:bg-slate-50'
                         }`}
                       >
-                        <td className="py-4 px-6 font-bold text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <span className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs">
+                        {/* Personal Details */}
+                        <td className="py-4 px-6 font-bold text-slate-900 min-w-[220px]">
+                          <div className="flex items-start gap-3">
+                            <span className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center text-sm shrink-0 mt-0.5">
                               👨‍⚕️
                             </span>
-                            <div>
-                              <div>{rec.patient_name}</div>
-                              <div className="text-[11px] font-medium text-slate-500">
-                                {rec.kiosk_data?.sex || 'N/A'},{' '}
-                                {rec.kiosk_data?.age || 'N/A'}y •{' '}
-                                {rec.phone_number}
+                            <div className="space-y-0.5">
+                              <div className="text-sm font-black text-slate-900">{rec.patient_name}</div>
+                              <div className="text-[11px] font-semibold text-slate-500">
+                                {rec.kiosk_data?.sex || 'N/A'}, {rec.kiosk_data?.age || 'N/A'} yrs
                               </div>
+                              <div className="text-[11px] text-teal-700 font-bold flex items-center gap-1">
+                                <Phone size={11} /> {rec.phone_number}
+                              </div>
+                              {rec.kiosk_data?.emergency && (
+                                <div className="text-[10px] text-red-600 font-bold">
+                                  🚨 Emergency: {rec.kiosk_data.emergency}
+                                </div>
+                              )}
+                              {rec.kiosk_data?.date && (
+                                <div className="text-[10px] text-slate-400 font-medium">
+                                  📅 Visit Date: {rec.kiosk_data.date}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-4 font-extrabold">
-                          <span
-                            className={
-                              vitals?.temperature &&
-                              (vitals.temperature > 100.5 ||
-                                vitals.temperature < 93.0)
-                                ? 'text-red-700 font-black'
-                                : 'text-slate-800'
-                            }
-                          >
-                            {vitals?.temperature
-                              ? `${vitals.temperature}°F`
-                              : 'N/A'}
-                          </span>
+
+                        {/* Recorded Vitals Grid */}
+                        <td className="py-4 px-4 min-w-[200px]">
+                          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                            <div className="p-1.5 rounded-lg bg-white/80 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">Temp</span>
+                              <span className={`font-black ${vitals?.temperature && (vitals.temperature > 100.5 || vitals.temperature < 93) ? 'text-red-700' : 'text-slate-800'}`}>
+                                {vitals?.temperature ? `${vitals.temperature}°F` : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/80 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">Pulse</span>
+                              <span className={`font-black ${vitals?.heart_rate && (vitals.heart_rate > 100 || vitals.heart_rate < 50) ? 'text-red-700' : 'text-slate-800'}`}>
+                                {vitals?.heart_rate ? `${vitals.heart_rate} BPM` : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/80 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">SpO2</span>
+                              <span className={`font-black ${vitals?.spo2 && vitals.spo2 < 95 ? 'text-red-700' : 'text-slate-800'}`}>
+                                {vitals?.spo2 ? `${vitals.spo2}%` : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/80 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">BP</span>
+                              <span className="font-black text-slate-800">
+                                {vitals?.blood_pressure || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-4 px-4 font-extrabold">
-                          <span
-                            className={
-                              vitals?.heart_rate &&
-                              (vitals.heart_rate > 100 ||
-                                vitals.heart_rate < 50)
-                                ? 'text-red-700 font-black'
-                                : 'text-slate-800'
-                            }
-                          >
-                            {vitals?.heart_rate
-                              ? `${vitals.heart_rate} BPM`
-                              : 'N/A'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 font-extrabold">
-                          <span
-                            className={
-                              vitals?.spo2 && vitals.spo2 < 95
-                                ? 'text-red-700 font-black'
-                                : 'text-slate-800'
-                            }
-                          >
-                            {vitals?.spo2 ? `${vitals.spo2}%` : 'N/A'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 font-extrabold text-slate-800">
-                          {vitals?.blood_pressure || 'N/A'}
-                        </td>
+
+                        {/* Vitals Status Badge */}
                         <td className="py-4 px-4">
                           <span
                             className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -326,21 +356,25 @@ export default function DoctorDashboardClient() {
                                 : 'bg-emerald-100 text-emerald-800'
                             }`}
                           >
-                            {(isAnomaly || isMild) && (
-                              <AlertTriangle size={11} />
-                            )}
-                            {!isAnomaly && !isMild && (
-                              <CheckCircle2 size={11} />
-                            )}
-                            {isAnomaly
-                              ? 'ANOMALY ALERT'
-                              : isMild
-                              ? 'MILD ABNORMAL'
-                              : 'NORMAL'}
+                            {(isAnomaly || isMild) && <AlertTriangle size={11} />}
+                            {!isAnomaly && !isMild && <CheckCircle2 size={11} />}
+                            {isAnomaly ? 'SENSOR ANOMALY' : isMild ? 'MILD ABNORMAL' : 'NORMAL'}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-right font-medium text-slate-600 max-w-xs truncate">
-                          {rec.symptoms || 'No symptoms recorded'}
+
+                        {/* Reported Symptoms & AI Triage Notes */}
+                        <td className="py-4 px-6 text-left font-medium text-slate-700 min-w-[240px] max-w-md">
+                          <div className="space-y-1">
+                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                              <FileText size={13} className="text-teal-600" />
+                              <span>{rec.symptoms || 'No symptoms recorded'}</span>
+                            </div>
+                            {rec.kiosk_data?.triage?.summary && (
+                              <p className="text-[11px] text-slate-500 italic bg-slate-100/70 p-2 rounded-xl border border-slate-200">
+                                AI Note: {rec.kiosk_data.triage.summary}
+                              </p>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
