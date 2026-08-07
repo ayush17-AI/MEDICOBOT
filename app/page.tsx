@@ -19,6 +19,7 @@ import {
   Globe, Calendar, ChevronRight, Stethoscope, Star, Clock, AlertTriangle,
   ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building,
 } from "lucide-react";
+import GoogleAuthGate from "@/components/GoogleAuthGate";
 import {
   useSpeechRecognition,
   cleanTranscript,
@@ -1945,13 +1946,15 @@ export default function Page() {
                 <AnimatePresence mode="wait">
                   {/* PHASE 3: FORM */}
                   {phase === "form" && (
-                    <FormStage
-                      key="form-stage"
-                      lang={lang}
-                      initialData={patient}
-                      onProceed={handleFormProceed}
-                      onBack={() => setPhase("language")}
-                    />
+                    <GoogleAuthGate>
+                      <FormStage
+                        key="form-stage"
+                        lang={lang}
+                        initialData={patient}
+                        onProceed={handleFormProceed}
+                        onBack={() => setPhase("language")}
+                      />
+                    </GoogleAuthGate>
                   )}
 
                   {/* PHASE 4A: SYMPTOMS */}
