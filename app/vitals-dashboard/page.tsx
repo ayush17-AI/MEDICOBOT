@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -161,7 +163,7 @@ export default function VitalsDashboardPage() {
             </div>
           </div>
 
-          {/* Preset Buttons for Automated & Manual Tests */}
+          {/* Simulation Preset Controls */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
               <Sliders size={13} /> Simulation Presets:

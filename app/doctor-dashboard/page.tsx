@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect } from 'react';
 import {
   Stethoscope,
@@ -8,11 +10,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   RefreshCcw,
-  Activity,
-  Heart,
-  Thermometer,
-  Gauge,
-  UserCheck,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 

@@ -44,4 +44,5 @@ export const patientSchema = z.object({
   }
 });
 
+export const patientInfoSchema = patientSchema;
 export type PatientSchemaType = z.infer<typeof patientSchema>;

@@ -1,11 +1,13 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { User, Phone, Calendar, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
-import { patientSchema, PatientSchemaType, COUNTRY_PHONE_CONFIG } from '@/lib/validations/patientSchema';
+import { patientInfoSchema, PatientSchemaType, COUNTRY_PHONE_CONFIG } from '@/lib/validations/patientSchema';
 
 export default function PatientInfoPage() {
   const router = useRouter();
@@ -17,7 +19,7 @@ export default function PatientInfoPage() {
     watch,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(patientSchema),
+    resolver: zodResolver(patientInfoSchema),
     defaultValues: {
       fullName: '',
       age: '' as unknown as number,
@@ -74,7 +76,7 @@ export default function PatientInfoPage() {
         {globalError && (
           <div
             data-testid="global-warning-banner"
-            className="mb-6 p-4 rounded-2xl bg-red-50 border-2 border-red-500 text-red-800 flex items-start gap-3 animate-shake"
+            className="mb-6 p-4 rounded-2xl bg-red-50 border-2 border-red-500 text-red-800 flex items-start gap-3 animate-shake shadow-sm"
           >
             <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
             <div className="text-xs sm:text-sm font-bold">{globalError}</div>
@@ -95,7 +97,7 @@ export default function PatientInfoPage() {
               data-invalid={!!errors.fullName}
               className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
                 errors.fullName
-                  ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-300'
+                  ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
                   : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
               }`}
             />
@@ -123,7 +125,7 @@ export default function PatientInfoPage() {
                 data-invalid={!!errors.age}
                 className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
                   errors.age
-                    ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-300'
+                    ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
                     : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
                 }`}
               />
@@ -145,7 +147,7 @@ export default function PatientInfoPage() {
                 data-invalid={!!errors.gender}
                 className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
                   errors.gender
-                    ? 'border-2 border-red-500 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-300'
+                    ? 'border-2 border-red-500 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-500'
                     : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
                 }`}
               >
@@ -193,7 +195,7 @@ export default function PatientInfoPage() {
                   data-invalid={!!errors.phoneNumber}
                   className={`w-full px-4 py-3 text-sm rounded-xl font-medium transition-all outline-none ${
                     errors.phoneNumber
-                      ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-300'
+                      ? 'border-2 border-red-500 bg-red-50 text-red-900 placeholder-red-300 focus:ring-2 focus:ring-red-500'
                       : 'border border-slate-300 bg-white text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-100'
                   }`}
                 />
