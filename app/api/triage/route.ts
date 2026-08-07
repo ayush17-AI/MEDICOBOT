@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Department, Severity, TriageResult } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+export type Department = "Cardiology" | "Gastroenterology" | "General Physician" | "Neurology" | "Orthopedics" | "Pulmonology" | "ENT" | "Pediatrics";
+export type Severity = "Red" | "Yellow" | "Green" | "Red (Emergency)" | "Yellow (Urgent)" | "Green (Standard)";
+
+export interface TriageResult {
+  department: string;
+  severity: string;
+  differential_factors?: string[];
+  clinical_reasoning?: string;
+  summary?: string;
+  provider: string;
+}
+
+interface TriageRequestBody {
+  symptomText: string;
+  age?: string;
+  sex?: string;
+  lang?: "en" | "hi";
+}
 
 const VALID_DEPARTMENTS: Department[] = [
   "Cardiology",
@@ -10,14 +28,7 @@ const VALID_DEPARTMENTS: Department[] = [
   "Neurology",
   "Orthopedics",
 ];
-const VALID_SEVERITIES: Severity[] = ["Red", "Yellow", "Green"];
-
-interface TriageRequestBody {
-  symptomText: string;
-  age?: string;
-  sex?: string;
-  lang?: "en" | "hi";
-}
+const VALID_SEVERITIES: Severity[] = ["Red", "Yellow", "Green", "Red (Emergency)", "Yellow (Urgent)", "Green (Standard)"];
 
 const SYSTEM_PROMPT = `You are a clinical triage assistant at a hospital OPD intake kiosk.
 
@@ -86,8 +97,8 @@ async function tryGroq(userPrompt: string): Promise<Omit<TriageResult, "provider
 }
 
 async function tryGemini(userPrompt: string): Promise<Omit<TriageResult, "provider">> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_API_KEY not set");
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY or GOOGLE_API_KEY not set");
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
@@ -117,8 +128,8 @@ async function tryOpenAI(userPrompt: string): Promise<Omit<TriageResult, "provid
   return coerceResult(extractJson(raw));
 }
 
-function offlineMock(body: TriageRequestBody): Omit<TriageResult, "provider"> {
-  const text = body.symptomText.toLowerCase();
+function offlineMock(body: TriageRequestBody & { prompt?: string }): Omit<TriageResult, "provider"> {
+  const text = (body.prompt || body.symptomText || "").toLowerCase();
   if (/chest|breath|heart/.test(text)) {
     return {
       department: "Cardiology",
@@ -152,17 +163,18 @@ function offlineMock(body: TriageRequestBody): Omit<TriageResult, "provider"> {
 }
 
 export async function POST(req: NextRequest) {
-  let body: TriageRequestBody;
+  let body: TriageRequestBody & { prompt?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
-  if (!body.symptomText || !body.symptomText.trim()) {
-    return NextResponse.json({ error: "symptomText is required" }, { status: 400 });
+  const inputPrompt = body.prompt || body.symptomText;
+  if (!inputPrompt || !inputPrompt.trim()) {
+    return NextResponse.json({ error: "prompt or symptomText is required" }, { status: 400 });
   }
 
-  const userPrompt = buildUserPrompt(body);
+  const userPrompt = buildUserPrompt({ ...body, symptomText: inputPrompt });
 
   const providers: { name: TriageResult["provider"]; run: () => Promise<Omit<TriageResult, "provider">> }[] = [
     { name: "groq", run: () => tryGroq(userPrompt) },
