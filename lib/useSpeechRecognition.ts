@@ -38,8 +38,13 @@ export function cleanTranscript(text: string): string {
   return cleaned;
 }
 
-export const sanitizePhoneDigits = (rawSpeech: string): string => {
-  if (!rawSpeech) return "";
+export const parseWhisperPhoneDigits = (rawText: string): string => {
+  if (!rawText) return "";
+  let text = rawText.toLowerCase();
+
+  // Convert phrases like "triple one" or "double seven"
+  text = text.replace(/triple (\w+)/g, '$1 $1 $1');
+  text = text.replace(/double (\w+)/g, '$1 $1');
 
   const wordMap: { [key: string]: string } = {
     'zero': '0', 'oh': '0', 'shunya': '0', 'जीरो': '0', 'शून्य': '0',
@@ -54,31 +59,25 @@ export const sanitizePhoneDigits = (rawSpeech: string): string => {
     'nine': '9', 'nein': '9', 'nau': '9', 'नौ': '9'
   };
 
-  let str = rawSpeech.toLowerCase();
-
-  // Replace spoken word digits
   Object.keys(wordMap).forEach((word) => {
-    const regex = new RegExp(`\\b${word}\\b`, 'g');
-    str = str.replace(regex, wordMap[word]);
+    const reg = new RegExp(`\\b${word}\\b`, 'g');
+    text = text.replace(reg, wordMap[word]);
   });
 
-  // Keep ONLY numeric digits
-  let digitsOnly = str.replace(/\D/g, '');
-
-  // Strip ghost leading '1' or '0' if digits exceed 10 or start incorrectly
-  if (digitsOnly.length > 10 && digitsOnly.startsWith('1')) {
-    digitsOnly = digitsOnly.substring(1);
-  } else if (digitsOnly.length === 11 && digitsOnly.startsWith('0')) {
-    digitsOnly = digitsOnly.substring(1);
+  const digits = text.replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('1')) {
+    return digits.substring(1).slice(0, 10);
+  } else if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.substring(1).slice(0, 10);
   }
-
-  return digitsOnly.slice(0, 10);
+  return digits.slice(0, 10);
 };
 
-export const processPhoneVoiceInput = sanitizePhoneDigits;
-export const cleanPhoneDigits = sanitizePhoneDigits;
-export const parsePhoneNumber = sanitizePhoneDigits;
-export const normalizePhoneNumber = sanitizePhoneDigits;
+export const sanitizePhoneDigits = parseWhisperPhoneDigits;
+export const processPhoneVoiceInput = parseWhisperPhoneDigits;
+export const cleanPhoneDigits = parseWhisperPhoneDigits;
+export const parsePhoneNumber = parseWhisperPhoneDigits;
+export const normalizePhoneNumber = parseWhisperPhoneDigits;
 
 export const cleanGenderInput = (rawTranscript: string): "Male" | "Female" | "Intersex" | "Other" => {
   const txt = rawTranscript.toLowerCase().trim();

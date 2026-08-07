@@ -30,6 +30,7 @@ import {
   stopVoiceSession,
   processPhoneVoiceInput,
   sanitizePhoneDigits,
+  parseWhisperPhoneDigits,
 } from "@/lib/useSpeechRecognition";
 
 /* =========================================================================
@@ -741,19 +742,95 @@ function FormStage({
     },
   });
 
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startPhoneWhisperRecording = async (field: "phone" | "emergency") => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('file', audioBlob);
+
+        try {
+          const res = await fetch('/api/whisper', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const data = await res.json();
+          if (data.text) {
+            const parsedNumber = parseWhisperPhoneDigits(data.text);
+            if (field === "phone") {
+              setPhone(parsedNumber);
+            } else {
+              setEmergency(parsedNumber);
+            }
+          }
+        } catch (err) {
+          console.error('Groq Whisper Transcription Failed:', err);
+        }
+
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setActiveMic(field);
+    } catch (err) {
+      console.error('Microphone access denied:', err);
+    }
+  };
+
+  const stopPhoneWhisperRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    setActiveMic(null);
+  };
+
   const toggleMic = (field: string) => {
     stopVoiceSession();
-    if (activeMic === field) {
-      setActiveMic(null);
-      stopListening();
+    if (field === "phone" || field === "emergency") {
+      if (activeMic === field) {
+        stopPhoneWhisperRecording();
+      } else {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        stopListening();
+        startPhoneWhisperRecording(field as "phone" | "emergency");
+      }
     } else {
-      setActiveMic(field);
-      startListening();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        stopPhoneWhisperRecording();
+      }
+      if (activeMic === field) {
+        setActiveMic(null);
+        stopListening();
+      } else {
+        setActiveMic(field);
+        startListening();
+      }
     }
   };
 
   const handleSubmit = () => {
     stopListening();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      stopPhoneWhisperRecording();
+    }
     onProceed({ name, age, sex, phone, emergency, date });
   };
 
