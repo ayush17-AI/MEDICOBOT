@@ -20,6 +20,8 @@ import {
   ShieldCheck, Sparkles, UserCheck, Bot, CheckCircle2, Volume2, AlertCircle, Building, LogOut,
 } from "lucide-react";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
+import UserHeader from "@/components/UserHeader";
+import LandingAudioPlayer from "@/components/LandingAudioPlayer";
 import { createClient } from "@/utils/supabase/client";
 import {
   useSpeechRecognition,
@@ -621,6 +623,8 @@ function LanguageStage({ onSelect, onReplay }: { onSelect: (l: Lang) => void; on
         <Volume2 size={15} className={`text-teal-600 ${isPlaying ? "animate-pulse" : ""}`} />
         <span>{isPlaying ? "Pause Guidance" : "Listen Guidance / Welcome Voice"}</span>
       </motion.button>
+
+      <LandingAudioPlayer />
 
       <div className="relative z-10 text-center space-y-2">
         <div className="flex items-center justify-center gap-2 mb-4">
@@ -2057,6 +2061,7 @@ export default function Page() {
             <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-blue-300/20 blur-3xl pointer-events-none" />
 
             <div className="relative z-10 flex flex-col min-h-screen">
+              <UserHeader />
               <HeaderBar lang={lang} />
 
               <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
