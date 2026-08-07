@@ -354,26 +354,28 @@ export function useSpeechRecognition({
       recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
 
       recognition.onresult = (event: any) => {
-        let currentCombined = "";
-        for (let i = 0; i < event.results.length; i++) {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
           const confidence = res[0]?.confidence ?? 1;
 
-          // CONFIDENCE GATE: Ignore audio input with confidence < 0.75
           if (confidence < 0.75 && confidence > 0) {
             setNoiseAlert(true);
             if (onNoiseDetected) onNoiseDetected();
             continue;
           }
 
-          const raw = res[0]?.transcript;
-          if (raw) {
-            currentCombined += raw + " ";
+          if (res.isFinal) {
+            finalTranscript += res[0].transcript;
+          } else {
+            interimTranscript += res[0].transcript;
           }
         }
 
-        if (currentCombined) {
-          const cleaned = cleanTranscript(currentCombined);
+        const rawToProcess = finalTranscript.trim() || interimTranscript.trim();
+        if (rawToProcess) {
+          const cleaned = cleanTranscript(rawToProcess);
           if (cleaned) {
             setTranscript(cleaned);
             if (onTranscript) onTranscript(cleaned);

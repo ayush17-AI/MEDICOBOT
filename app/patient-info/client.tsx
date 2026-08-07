@@ -4,10 +4,11 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { User, Phone, Calendar, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User, Calendar, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import {
   patientInfoSchema,
   COUNTRY_PHONE_CONFIG,
+  cleanPhoneNumber,
 } from '@/lib/validations/patientSchema';
 import { z } from 'zod';
 
@@ -24,6 +25,7 @@ export default function PatientInfoClient() {
   const {
     register,
     handleSubmit,
+    setValue,
     watch,
     formState: { errors },
   } = useForm<FormValues>({
@@ -50,16 +52,23 @@ export default function PatientInfoClient() {
 
   const onSubmit: SubmitHandler<FormValues> = (data) => {
     setGlobalError(null);
+
+    const cleanMobile = cleanPhoneNumber(data.phoneNumber, data.countryCode);
+    const cleanEmergency = cleanPhoneNumber(
+      data.emergencyContact || '',
+      data.emergencyCountryCode
+    );
+
     const payload = {
       name: data.fullName.trim(),
       age: String(data.age),
       sex: data.gender,
       countryCode: data.countryCode,
-      mobile: data.phoneNumber,
-      phone: `${data.countryCode} ${data.phoneNumber}`,
+      mobile: cleanMobile,
+      phone: `${data.countryCode} ${cleanMobile}`,
       emergencyCountryCode: data.emergencyCountryCode,
-      emergencyMobile: data.emergencyContact || '',
-      emergency: data.emergencyContact ? `${data.emergencyCountryCode} ${data.emergencyContact}` : '',
+      emergencyMobile: cleanEmergency,
+      emergency: cleanEmergency ? `${data.emergencyCountryCode} ${cleanEmergency}` : '',
       date: data.appointmentDate || today,
     };
     sessionStorage.setItem('medicobot_patient', JSON.stringify(payload));
@@ -209,6 +218,14 @@ export default function PatientInfoClient() {
             <div className="flex items-center gap-2">
               <select
                 {...register('countryCode')}
+                onChange={(e) => {
+                  const newCc = e.target.value;
+                  setValue('countryCode', newCc);
+                  const currentP = watch('phoneNumber');
+                  if (currentP) {
+                    setValue('phoneNumber', cleanPhoneNumber(currentP, newCc));
+                  }
+                }}
                 data-testid="country-code-select"
                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
@@ -220,6 +237,10 @@ export default function PatientInfoClient() {
               </select>
               <input
                 {...register('phoneNumber')}
+                onChange={(e) => {
+                  const stripped = cleanPhoneNumber(e.target.value, selectedCountryCode);
+                  setValue('phoneNumber', stripped, { shouldValidate: true });
+                }}
                 type="tel"
                 placeholder="Phone Number"
                 data-testid="phoneNumber-input"
@@ -254,6 +275,14 @@ export default function PatientInfoClient() {
             <div className="flex items-center gap-2">
               <select
                 {...register('emergencyCountryCode')}
+                onChange={(e) => {
+                  const newCc = e.target.value;
+                  setValue('emergencyCountryCode', newCc);
+                  const currentE = watch('emergencyContact');
+                  if (currentE) {
+                    setValue('emergencyContact', cleanPhoneNumber(currentE, newCc));
+                  }
+                }}
                 data-testid="emergency-country-code-select"
                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
@@ -265,6 +294,10 @@ export default function PatientInfoClient() {
               </select>
               <input
                 {...register('emergencyContact')}
+                onChange={(e) => {
+                  const stripped = cleanPhoneNumber(e.target.value, selectedEmCountryCode);
+                  setValue('emergencyContact', stripped, { shouldValidate: true });
+                }}
                 type="tel"
                 placeholder="Emergency Contact Number"
                 data-testid="emergencyContact-input"

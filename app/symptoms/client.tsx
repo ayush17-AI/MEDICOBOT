@@ -3,19 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Stethoscope,
-  Activity,
-  Heart,
-  Thermometer,
-  Gauge,
   Mic,
   MicOff,
+  Stethoscope,
   ArrowRight,
   ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  User,
-  Building,
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
@@ -121,132 +113,77 @@ export default function SymptomsClient() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-blue-50/30 relative p-4 sm:p-8 flex flex-col items-center overflow-y-auto">
-      <div className="absolute top-10 left-10 w-96 h-96 bg-teal-200/30 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-slate-50 relative flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+      {/* Background Glows */}
+      <div className="absolute top-10 left-10 w-96 h-96 bg-teal-200/40 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/40 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-6xl mx-auto space-y-6 my-4 px-4">
-        {/* Header */}
-        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/20">
-              <Stethoscope size={30} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800">
-                  Step 3: AI Symptom Triage &amp; OPD Booking
-                </span>
-                {patient && (
-                  <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-                    <User size={13} /> {patient.name} ({patient.sex}, {patient.age}y)
-                  </span>
-                )}
-              </div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
-                Symptom &amp; Clinical History Input
-              </h1>
-            </div>
+      <div className="relative z-10 w-full max-w-lg space-y-6 my-6">
+        {/* Centered Image 2 Symptom Card */}
+        <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-center">
+          {/* Header Title & Subtitle */}
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              Describe Your Symptoms
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 mt-1">
+              Tap the mic and speak clearly, or type in the box below
+            </p>
           </div>
 
+          {/* Big Center Mic Button */}
+          <div className="flex flex-col items-center justify-center space-y-2 py-2">
+            <button
+              type="button"
+              onClick={toggleRecording}
+              data-testid="voice-recorder-btn"
+              className={`w-20 h-20 rounded-full flex items-center justify-center text-white shadow-xl transition-all cursor-pointer ${
+                isListening
+                  ? 'bg-red-500 animate-pulse ring-8 ring-red-200 scale-105'
+                  : 'bg-teal-500 hover:bg-teal-600 shadow-teal-500/30'
+              }`}
+            >
+              {isListening ? <MicOff size={36} /> : <Mic size={36} />}
+            </button>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+              {isListening ? '🎙️ LISTENING...' : 'TAP TO SPEAK'}
+            </span>
+          </div>
+
+          {/* Label & Textarea */}
+          <div className="text-left space-y-1.5">
+            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-600">
+              SYMPTOM TRANSCRIPT (REVIEW / EDIT) <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={symptoms}
+              onChange={(e) => setSymptoms(e.target.value)}
+              placeholder="e.g., Severe chest pain, shortness of breath, and mild dizziness for 2 hours..."
+              data-testid="symptoms-textarea"
+              className="w-full p-4 rounded-2xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 text-sm font-medium outline-none text-slate-900 placeholder:text-slate-400 bg-white shadow-xs"
+            />
+          </div>
+
+          {/* Primary Full Width Action Button */}
           <button
-            onClick={() => router.push('/doctor-dashboard')}
-            className="px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md"
+            type="button"
+            onClick={handleAnalyze}
+            disabled={isAnalyzing || !symptoms.trim()}
+            data-testid="analyze-symptoms-btn"
+            className={`w-full py-4 px-6 rounded-2xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 ${
+              !symptoms.trim() || isAnalyzing
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                : 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-lg shadow-teal-600/25 cursor-pointer'
+            }`}
           >
-            <Building size={14} />
-            <span>Doctor Dashboard</span>
+            <span>{isAnalyzing ? 'Analyzing Symptoms...' : '🩺 Analyze Symptoms →'}</span>
           </button>
         </div>
 
-        {/* Recorded Vitals Summary Bar */}
-        {vitals && (
-          <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-xs flex flex-wrap items-center justify-around gap-4 text-xs">
-            <div className="flex items-center gap-2">
-              <Thermometer size={16} className="text-orange-500" />
-              <span className="text-slate-500 font-medium">Temp:</span>
-              <span className="font-extrabold text-slate-900">{vitals.temperature}°F</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Heart size={16} className="text-rose-500" />
-              <span className="text-slate-500 font-medium">Heart Rate:</span>
-              <span className="font-extrabold text-slate-900">{vitals.heart_rate} BPM</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Activity size={16} className="text-blue-500" />
-              <span className="text-slate-500 font-medium">SpO2:</span>
-              <span className="font-extrabold text-slate-900">{vitals.spo2}%</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Gauge size={16} className="text-purple-500" />
-              <span className="text-slate-500 font-medium">BP:</span>
-              <span className="font-extrabold text-slate-900">{vitals.blood_pressure} mmHg</span>
-            </div>
-          </div>
-        )}
-
-        {/* Symptom Input Form with Restored Voice Mic Button */}
-        <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                Describe Your Health Symptoms <span className="text-red-500 font-black">*</span>
-              </label>
-
-              {/* Interactive Speech Recorder Button */}
-              <button
-                type="button"
-                onClick={toggleRecording}
-                data-testid="voice-recorder-btn"
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer ${
-                  isListening
-                    ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200'
-                    : 'bg-teal-600 hover:bg-teal-700 text-white'
-                }`}
-              >
-                {isListening ? <MicOff size={16} /> : <Mic size={16} />}
-                <span>{isListening ? '⏹️ Stop Recording (Listening...)' : '🎙️ Speak Symptoms'}</span>
-              </button>
-            </div>
-
-            <div className="relative">
-              <textarea
-                rows={4}
-                value={symptoms}
-                onChange={(e) => setSymptoms(e.target.value)}
-                placeholder="Tap 🎙️ Speak Symptoms or type here (e.g. I have had a high fever for 2 days, severe headache, muscle aches, and mild sore throat...)"
-                data-testid="symptoms-textarea"
-                className="w-full p-4 rounded-2xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 text-sm font-medium outline-none text-slate-900 placeholder:text-slate-400 shadow-xs"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || !symptoms.trim()}
-              data-testid="analyze-symptoms-btn"
-              className={`w-full sm:w-auto py-3.5 px-8 rounded-2xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 ${
-                !symptoms.trim() || isAnalyzing
-                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
-                  : 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-lg shadow-teal-600/25 cursor-pointer'
-              }`}
-            >
-              <span>{isAnalyzing ? 'Analyzing Symptoms...' : 'Run AI Symptom Triage'}</span>
-              <ArrowRight size={18} />
-            </button>
-
-            <button
-              onClick={() => router.push('/vitals-dashboard')}
-              className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
-            >
-              <RotateCcw size={14} /> Back to Vitals
-            </button>
-          </div>
-        </div>
-
-        {/* AI Triage & OPD Token Output */}
+        {/* AI Triage & OPD Token Confirmation Screen */}
         {triageResult && (
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-left animate-fadeIn">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
               <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
                 🩺
@@ -265,9 +202,9 @@ export default function SymptomsClient() {
               {triageResult.summary || triageResult.clinical_summary}
             </p>
 
-            {/* Token Generation */}
+            {/* Token Generation & Direct Doctor Dashboard Button */}
             {tokenGenerated ? (
-              <div className="p-6 rounded-3xl bg-emerald-600 text-white shadow-lg space-y-2 text-center">
+              <div className="p-6 rounded-3xl bg-emerald-600 text-white shadow-lg space-y-3 text-center">
                 <span className="text-xs font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full inline-block">
                   OPD Appointment Confirmed!
                 </span>
@@ -275,12 +212,13 @@ export default function SymptomsClient() {
                 <p className="text-xs text-emerald-100">
                   Assigned Doctor: <strong>{selectedDoc}</strong> ({triageResult.department})
                 </p>
-                <div className="pt-3">
+                <div className="pt-2">
                   <button
                     onClick={() => router.push('/doctor-dashboard')}
-                    className="px-6 py-2.5 rounded-xl bg-white text-emerald-800 font-bold text-xs hover:bg-emerald-50 transition cursor-pointer shadow-md"
+                    data-testid="goto-doctor-dashboard-btn"
+                    className="w-full py-3.5 px-6 rounded-2xl bg-white text-emerald-900 font-black text-sm hover:bg-emerald-50 transition cursor-pointer shadow-md flex items-center justify-center gap-2"
                   >
-                    View Record in Doctor Dashboard →
+                    <span>Go to Doctor Dashboard →</span>
                   </button>
                 </div>
               </div>
@@ -289,7 +227,7 @@ export default function SymptomsClient() {
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Available OPD Specialists for Consultation:
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
                   {['Dr. Alok Mishra (General Physician)', 'Dr. Kavita Singh (Internal Medicine)'].map((doc) => (
                     <div
                       key={doc}
@@ -298,12 +236,22 @@ export default function SymptomsClient() {
                       <span className="text-xs font-bold text-slate-800">{doc}</span>
                       <button
                         onClick={() => handleBookDoctor(doc)}
-                        className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs cursor-pointer"
                       >
                         Book &amp; Generate Token
                       </button>
                     </div>
                   ))}
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => router.push('/doctor-dashboard')}
+                    data-testid="goto-doctor-dashboard-btn"
+                    className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer transition shadow-sm text-center"
+                  >
+                    Go to Doctor Dashboard →
+                  </button>
                 </div>
               </div>
             )}

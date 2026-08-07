@@ -13,6 +13,16 @@ export const COUNTRY_PHONE_CONFIG: Record<
   '+49': { name: 'Germany', digits: 10, flag: '🇩🇪', pattern: /^1\d{9}$/ },
 };
 
+export const cleanPhoneNumber = (rawInput: string, countryCode: string): string => {
+  if (!rawInput) return '';
+  let cleaned = rawInput.replace(/\D/g, ''); // remove non-digits
+  const codeDigits = countryCode ? countryCode.replace(/\D/g, '') : ''; // e.g. "91"
+  if (codeDigits && cleaned.startsWith(codeDigits) && cleaned.length > codeDigits.length) {
+    cleaned = cleaned.slice(codeDigits.length);
+  }
+  return cleaned;
+};
+
 export const patientSchema = z
   .object({
     fullName: z
@@ -37,7 +47,7 @@ export const patientSchema = z
     // Validate Primary Phone
     const config =
       COUNTRY_PHONE_CONFIG[data.countryCode] || COUNTRY_PHONE_CONFIG['+91'];
-    const cleanPhone = data.phoneNumber.replace(/\D/g, '');
+    const cleanPhone = cleanPhoneNumber(data.phoneNumber, data.countryCode);
 
     if (cleanPhone.length !== config.digits) {
       ctx.addIssue({
@@ -58,7 +68,10 @@ export const patientSchema = z
       const emConfig =
         COUNTRY_PHONE_CONFIG[data.emergencyCountryCode] ||
         COUNTRY_PHONE_CONFIG['+91'];
-      const cleanEmPhone = data.emergencyContact.replace(/\D/g, '');
+      const cleanEmPhone = cleanPhoneNumber(
+        data.emergencyContact,
+        data.emergencyCountryCode
+      );
 
       if (cleanEmPhone.length !== emConfig.digits) {
         ctx.addIssue({
