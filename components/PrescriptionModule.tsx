@@ -81,6 +81,11 @@ export function PrescriptionModule({ patientId, activeRecord, onDispatchSuccess 
           patientId: patientId || activeRecord?.id || 'PAT-DEMO-001',
           patientName: targetName,
           patientPhone: targetPhone,
+          doctorName: activeRecord?.doctor_name || activeRecord?.department || 'Dr. Alok Mishra',
+          tokenNumber: activeRecord?.token_no || 'MED-3647',
+          roomNumber: activeRecord?.room || 'Room 204',
+          currentServingToken: 'MED-3642',
+          estimatedWaitTime: '12 Mins (2 Patients Ahead)',
           prescriptionText: prescriptionText,
           transcriptionSource: transcriptionSource,
           fulfillInHousePharmacy: fulfillPharmacy,
@@ -93,7 +98,7 @@ export function PrescriptionModule({ patientId, activeRecord, onDispatchSuccess 
         if (data.whatsappDeepLink && typeof window !== 'undefined') {
           window.open(data.whatsappDeepLink, '_blank');
         }
-        alert('✅ Prescription sent to In-House Pharmacy & WhatsApp!');
+        alert('✅ Enhanced WhatsApp OPD Ticket, Navigation & Prescription Sent!');
         if (onDispatchSuccess) onDispatchSuccess(data);
       }
     } catch (err) {

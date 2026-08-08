@@ -123,6 +123,38 @@ export default function ConsultationClient() {
     }
   };
 
+  const handleDispatchWithQueueDetails = async () => {
+    const targetPhone = patient?.phone || patient?.mobile || '9461112639';
+    const targetName = patient?.name || patient?.fullName || 'Ayush Naraniwal';
+
+    try {
+      const res = await fetch('/api/v1/prescription/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: patient?.id || 'PAT-DEMO-001',
+          patientName: targetName,
+          patientPhone: targetPhone,
+          doctorName: selectedDoctor?.name || 'Dr. Alok Mishra',
+          tokenNumber: tokenGenerated || 'MED-3647',
+          roomNumber: 'Room 204',
+          currentServingToken: 'MED-3642',
+          estimatedWaitTime: '12 Mins (2 Patients Ahead)',
+          prescriptionText: symptoms || 'Paracetamol 500mg BD after meals.',
+          fulfillInHousePharmacy: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.whatsappDeepLink && typeof window !== 'undefined') {
+        window.open(data.whatsappDeepLink, '_blank');
+        alert('✅ Enhanced WhatsApp OPD Ticket & Navigation Sent!');
+      }
+    } catch (err) {
+      console.error('Dispatch Err:', err);
+    }
+  };
+
   useEffect(() => {
     try {
       const p = sessionStorage.getItem('medicobot_patient');
@@ -455,21 +487,13 @@ async function triggerEmergencySMSNotification(patientName: string, phone: strin
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               {/* WhatsApp Button */}
-              <a
-                href={generateDirectWhatsAppUrl({
-                  patientName: patient?.name || patient?.fullName || 'Patient',
-                  phoneNumber: patient?.phone || patient?.mobile || '9461112639',
-                  countryCode: patient?.countryCode || '91',
-                  appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
-                  tokenNumber: tokenGenerated || '#MED-1150',
-                  doctorName: selectedDoctor?.name || 'General Physician',
-                })}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={handleDispatchWithQueueDetails}
                 className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 💬 Send via WhatsApp
-              </a>
+              </button>
 
               {/* SMS Button */}
               <button
