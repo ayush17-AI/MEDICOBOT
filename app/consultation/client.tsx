@@ -15,7 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber, checkAndTriggerEmergencyAlert } from '@/lib/whatsappHelper';
+import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber, checkAndTriggerEmergencyAlert, sendRealWhatsAppNotification } from '@/lib/whatsappHelper';
 import { RiskService } from '@/src/services/risk.service';
 
 export interface DoctorSpec {
@@ -252,13 +252,31 @@ export default function ConsultationClient() {
 
         {/* High Risk Critical Red Warning Card */}
         {activeRisk && activeRisk.riskScore >= 70 && (
-          <div data-testid="critical-risk-warning-card" className="p-5 rounded-3xl bg-red-600 text-white shadow-lg border-2 border-red-700 space-y-2 animate-shake">
-            <div className="flex items-center gap-2 font-black text-sm uppercase tracking-wider">
-              <span>🚨 CRITICAL RISK DETECTED</span>
+          <div data-testid="critical-risk-warning-card" className="p-5 rounded-3xl bg-red-600 text-white shadow-lg border-2 border-red-700 space-y-3 animate-shake flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 font-black text-sm uppercase tracking-wider mb-1">
+                <span>🚨 CRITICAL RISK DETECTED</span>
+              </div>
+              <p className="text-xs sm:text-sm font-bold leading-relaxed">
+                CRITICAL RISK DETECTED — Automatic emergency alert sent to primary contact ({patient?.emergencyMobile || patient?.emergencyContact || patient?.emergency || 'Registered Contact'}).
+              </p>
             </div>
-            <p className="text-xs sm:text-sm font-bold leading-relaxed">
-              CRITICAL RISK DETECTED — Automatic emergency alert sent to primary contact ({patient?.emergencyMobile || patient?.emergencyContact || patient?.emergency || 'Registered Contact'}).
-            </p>
+            <button
+              onClick={() => {
+                const emContact = patient?.emergencyMobile || patient?.emergencyContact || patient?.emergency || '9461112639';
+                sendRealWhatsAppNotification({
+                  to: emContact,
+                  patientName: patient?.name || 'Patient',
+                  riskScore: activeRisk.riskScore,
+                  primarySymptom: symptoms || 'Acute Medical Symptoms',
+                  vitalsSummary: vitals ? `Temp ${vitals.temperature || '98.6'}°F, HR ${vitals.heart_rate || vitals.heartRate || '72'} BPM, SpO2 ${vitals.spo2 || '98'}%` : 'Requires Immediate Evaluation',
+                });
+              }}
+              data-testid="send-whatsapp-alert-btn"
+              className="px-5 py-3 rounded-2xl bg-white text-red-700 hover:bg-red-50 font-black text-xs sm:text-sm shadow-md transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              📲 Send Emergency WhatsApp Alert Now
+            </button>
           </div>
         )}
 
