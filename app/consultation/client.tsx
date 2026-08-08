@@ -102,6 +102,39 @@ export default function ConsultationClient() {
     }
   }, []);
 
+// Automatic High-Risk SMS Trigger Handler
+async function triggerEmergencySMSNotification(patientName: string, phone: string, riskScore: number, symptom: string) {
+  if (!phone || riskScore < 70) return;
+
+  try {
+    const res = await fetch('/api/v1/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: phone,
+        patientName: patientName,
+        riskScore: riskScore,
+        primarySymptom: symptom,
+      }),
+    });
+
+    const data = await res.json();
+    console.log('[AUTO-SMS STATUS]', data);
+
+    // Native fallback if Fast2SMS fails or runs out of credits
+    if (!data.success && typeof window !== 'undefined') {
+      const cleanNum = phone.replace(/[^0-9]/g, '').slice(-10);
+      const textMsg = encodeURIComponent(`CRITICAL ALERT: Patient ${patientName} High Risk (${riskScore}/100) - ${symptom}`);
+      console.log('[FALLBACK NATIVE SMS PROTOCOL INITIATED]');
+      const link = document.createElement('a');
+      link.href = `sms:+91${cleanNum}?body=${textMsg}`;
+      link.click();
+    }
+  } catch (err) {
+    console.error('[SMS TRIGGER ERROR]', err);
+  }
+}
+
   // STEP 3: Automatic High-Risk Emergency Alert Dispatch (WhatsApp + Fast2SMS)
   useEffect(() => {
     if (riskEvaluation && patient) {
@@ -116,20 +149,13 @@ export default function ConsultationClient() {
           vitalsSummary: vitals ? `Temp ${vitals.temperature || '98.6'}°F, HR ${vitals.heart_rate || vitals.heartRate || '72'} BPM, SpO2 ${vitals.spo2 || '98'}%` : 'Requires Immediate Evaluation',
         });
 
-        // Fast2SMS Real Direct SMS Dispatch
-        fetch('/api/v1/sms/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: emContact,
-            patientName: patient.name || 'Patient',
-            riskScore: score,
-            primarySymptom: symptoms || 'reported symptoms',
-          }),
-        })
-          .then((res) => res.json())
-          .then((data) => console.log('[FAST2SMS SYSTEM RESULT]', data))
-          .catch((err) => console.error('[FAST2SMS DISPATCH ERR]', err));
+        // Fast2SMS + Native Fallback Dispatch
+        triggerEmergencySMSNotification(
+          patient.name || 'Patient',
+          emContact,
+          score,
+          symptoms || 'reported symptoms'
+        );
 
         const pid = patient.id || patient.phone || patient.name || 'anonymous_patient';
         logTimelineEvent({

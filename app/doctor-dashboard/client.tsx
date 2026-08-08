@@ -908,6 +908,24 @@ export default function DoctorDashboardClient() {
                 <p className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-slate-700 leading-relaxed font-medium">
                   {activeRec.kiosk_data?.triage?.summary || activeRec.kiosk_data?.triage?.clinical_summary || 'Standard routine checkup assessment.'}
                 </p>
+                {(() => {
+                  const activeRisk = evaluateRecordRisk(activeRec);
+                  if (activeRisk.riskScore >= 70) {
+                    return (
+                      <button
+                        onClick={() => {
+                          const cleanNum = (activeRec.phone_number || '').replace(/[^0-9]/g, '').slice(-10);
+                          const msg = encodeURIComponent(`CRITICAL MEDICAL ALERT: Patient ${activeRec.patient_name} requires urgent care.`);
+                          window.open(`sms:+91${cleanNum}?body=${msg}`, '_self');
+                        }}
+                        className="mt-2.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5 transition-all cursor-pointer w-full justify-center"
+                      >
+                        <span>📱</span> Trigger Direct Emergency SMS
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               <div>
