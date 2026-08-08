@@ -11,6 +11,7 @@ import {
   cleanPhoneNumber,
 } from '@/lib/validations/patientSchema';
 import { z } from 'zod';
+import { GlobalHeader } from '@/components/GlobalHeader';
 
 type FormValues = z.infer<typeof patientInfoSchema>;
 
@@ -82,8 +83,9 @@ export default function PatientInfoClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 relative flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-      {/* Background Glow */}
+    <div className="min-h-screen bg-slate-50 relative flex flex-col items-center pb-12 overflow-y-auto">
+      <GlobalHeader />
+      {/* Background Glows */}
       <div className="absolute top-10 left-10 w-96 h-96 bg-teal-200/40 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/40 rounded-full blur-3xl pointer-events-none" />
 

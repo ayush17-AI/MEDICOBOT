@@ -15,6 +15,7 @@ import { createClient } from '@/utils/supabase/client';
 import { useSpeechRecognition, cleanTranscript } from '@/lib/useSpeechRecognition';
 import { RiskService } from '@/src/services/risk.service';
 import { logTimelineEvent } from '@/lib/timelineLogger';
+import { GlobalHeader } from '@/components/GlobalHeader';
 
 function parseSystolicBP(val: any): number | undefined {
   if (typeof val === 'number' && Number.isFinite(val)) return val;
@@ -192,7 +193,8 @@ export default function SymptomsClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 relative flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div className="min-h-screen bg-slate-50 relative flex flex-col items-center pb-12 overflow-y-auto">
+      <GlobalHeader />
       {/* Background Glows */}
       <div className="absolute top-10 left-10 w-96 h-96 bg-teal-200/40 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/40 rounded-full blur-3xl pointer-events-none" />
