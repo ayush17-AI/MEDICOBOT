@@ -14,13 +14,12 @@ import {
   ShieldAlert,
   Cpu,
   User,
-  Sliders,
-  Edit3,
 } from 'lucide-react';
 import {
   evaluateVitalsEngine,
   VitalsInput,
   VitalsEvalResult,
+  VitalsStatus,
 } from '@/lib/vitalsEngine';
 import { createClient } from '@/utils/supabase/client';
 
@@ -55,7 +54,6 @@ export default function VitalsDashboardClient() {
 
   const [isReading, setIsReading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
 
   useEffect(() => {
     try {
@@ -76,17 +74,16 @@ export default function VitalsDashboardClient() {
     updateVitals(next);
   };
 
-  const runSensorRead = (preset: 'normal' | 'mild' | 'anomaly' = 'normal') => {
+  const runSensorRead = () => {
     setIsReading(true);
     setTimeout(() => {
-      let data: VitalsInput;
-      if (preset === 'anomaly') {
-        data = { temperature: 110.0, heartRate: 35, spo2: 40, sysBP: 210, diaBP: 130 };
-      } else if (preset === 'mild') {
-        data = { temperature: 101.4, heartRate: 112, spo2: 93, sysBP: 138, diaBP: 88 };
-      } else {
-        data = { temperature: 98.6, heartRate: 72, spo2: 98, sysBP: 120, diaBP: 80 };
-      }
+      const data: VitalsInput = {
+        temperature: 98.6,
+        heartRate: 72,
+        spo2: 98,
+        sysBP: 120,
+        diaBP: 80,
+      };
       updateVitals(data);
       setIsReading(false);
     }, 600);
@@ -134,24 +131,39 @@ export default function VitalsDashboardClient() {
     vitals && evalResult && !evalResult.isAnomaly && !isSyncing
   );
 
-  const statusBadge = (status: string | undefined, message: string) => {
-    const isErr = status === 'ANOMALY_ERROR';
-    const isMild = status === 'MILD_ABNORMAL';
+  const statusBadge = (status: VitalsStatus, message: string) => {
+    let colorClasses = 'bg-slate-200 text-slate-800 border border-slate-300';
+    let icon = <AlertTriangle size={12} />;
+
+    if (status === 'NORMAL') {
+      colorClasses = 'bg-emerald-100 text-emerald-800 border border-emerald-300';
+      icon = <CheckCircle2 size={12} />;
+    } else if (status === 'MEDIUM') {
+      colorClasses = 'bg-amber-100 text-amber-900 border border-amber-300';
+      icon = <AlertTriangle size={12} />;
+    } else if (status === 'SEVERE') {
+      colorClasses = 'bg-red-100 text-red-900 border border-red-300';
+      icon = <AlertTriangle size={12} />;
+    } else if (status === 'INVALID') {
+      colorClasses = 'bg-gray-200 text-gray-800 border border-gray-400 font-extrabold';
+      icon = <AlertTriangle size={12} className="text-gray-600" />;
+    }
+
     return (
       <span
-        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-          isErr
-            ? 'bg-red-200 text-red-900'
-            : isMild
-            ? 'bg-amber-200 text-amber-900'
-            : 'bg-emerald-100 text-emerald-800'
-        }`}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold leading-tight ${colorClasses}`}
       >
-        {isErr && <AlertTriangle size={12} />}
-        {!isErr && !isMild && <CheckCircle2 size={12} />}
+        {icon}
         {message}
       </span>
     );
+  };
+
+  const cardBorderClass = (status: VitalsStatus | undefined) => {
+    if (status === 'INVALID') return 'border-2 border-gray-400 bg-gray-50/70 shadow-md shadow-gray-200';
+    if (status === 'SEVERE') return 'border-2 border-red-500 bg-red-50/50 shadow-md shadow-red-200';
+    if (status === 'MEDIUM') return 'border-2 border-amber-400 bg-amber-50/50 shadow-sm';
+    return 'border-slate-200 bg-white';
   };
 
   return (
@@ -160,8 +172,8 @@ export default function VitalsDashboardClient() {
       <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-4xl space-y-6 my-4">
-        {/* Header */}
-        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        {/* Header - Clean Top Banner */}
+        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-md flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/20">
               <Cpu size={30} />
@@ -183,73 +195,34 @@ export default function VitalsDashboardClient() {
               </h1>
             </div>
           </div>
-
-          {/* Simulation & Manual Mode Presets */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setManualMode(!manualMode)}
-              data-testid="toggle-manual-input-btn"
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 transition-all flex items-center gap-1 cursor-pointer"
-            >
-              <Edit3 size={12} />
-              {manualMode ? 'Hide Manual Inputs' : 'Edit Vitals Manually'}
-            </button>
-            <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-              <Sliders size={12} /> Test Presets:
-            </span>
-            <button
-              onClick={() => runSensorRead('normal')}
-              disabled={isReading}
-              data-testid="preset-normal-btn"
-              className="px-3 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold transition-all cursor-pointer"
-            >
-              Normal (98.6°F)
-            </button>
-            <button
-              onClick={() => runSensorRead('mild')}
-              disabled={isReading}
-              data-testid="preset-mild-btn"
-              className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold transition-all cursor-pointer"
-            >
-              Mild Fever (101.4°F)
-            </button>
-            <button
-              onClick={() => runSensorRead('anomaly')}
-              disabled={isReading}
-              data-testid="preset-anomaly-btn"
-              className="px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 text-red-800 text-xs font-bold border border-red-300 transition-all cursor-pointer"
-            >
-              ⚠️ Anomaly (110°F)
-            </button>
-          </div>
         </div>
 
         {/* Anomaly Alert Banner */}
         {evalResult?.isAnomaly && (
           <div
             data-testid="vitals-anomaly-alert"
-            className="p-6 rounded-3xl bg-red-600 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-2 border-red-700 animate-shake"
+            className="p-6 rounded-3xl bg-gray-800 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-2 border-gray-900 animate-shake"
           >
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
                 <ShieldAlert size={28} />
               </div>
               <div>
-                <span className="inline-block px-3 py-0.5 rounded-full bg-white text-red-700 font-black text-xs uppercase tracking-wider mb-1">
-                  Sensor Reading Anomaly Detected!
+                <span className="inline-block px-3 py-0.5 rounded-full bg-red-500 text-white font-black text-xs uppercase tracking-wider mb-1">
+                  ⚠️ Invalid Biological Reading Detected
                 </span>
                 <p className="text-sm sm:text-base font-bold leading-snug">
-                  Humanly Impossible Reading Detected (Possible Hardware Error). Please re-enter/re-read vitals.
+                  {evalResult.alertMessage || 'Invalid Biological Reading Detected (Out of Human Bounds). Please correct inputs or re-read hardware sensors.'}
                 </p>
-                <p className="text-xs text-red-100 mt-1 font-medium">
-                  Readings cross biological bounds (e.g., Temp &gt; 105°F, SpO2 &lt; 50%, or HR &gt; 180 BPM). Please re-attach hardware sensors or correct manual inputs.
+                <p className="text-xs text-gray-300 mt-1 font-medium">
+                  One or more vitals cross human biological bounds. Navigation is blocked until a valid reading is entered.
                 </p>
               </div>
             </div>
             <button
-              onClick={() => runSensorRead('normal')}
+              onClick={runSensorRead}
               data-testid="reread-sensors-btn"
-              className="px-5 py-3 rounded-2xl bg-white text-red-700 hover:bg-red-50 font-black text-xs sm:text-sm shadow-md transition-all shrink-0 flex items-center gap-2 cursor-pointer"
+              className="px-5 py-3 rounded-2xl bg-white text-gray-900 hover:bg-gray-100 font-black text-xs sm:text-sm shadow-md transition-all shrink-0 flex items-center gap-2 cursor-pointer"
             >
               <RefreshCw
                 size={16}
@@ -265,13 +238,7 @@ export default function VitalsDashboardClient() {
           {/* Temperature Card */}
           <div
             data-testid="vital-card-temperature"
-            className={`p-5 rounded-3xl bg-white border transition-all ${
-              evalResult?.temperature.status === 'ANOMALY_ERROR'
-                ? 'border-2 border-red-500 bg-red-50/50 shadow-md shadow-red-200'
-                : evalResult?.temperature.status === 'MILD_ABNORMAL'
-                ? 'border-2 border-amber-400 bg-amber-50/50'
-                : 'border-slate-200'
-            }`}
+            className={`p-5 rounded-3xl border transition-all ${cardBorderClass(evalResult?.temperature.status)}`}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -285,15 +252,15 @@ export default function VitalsDashboardClient() {
               {vitals.temperature}°F
             </div>
 
-            {/* Interactive Slider / Input */}
+            {/* Interactive Input */}
             <div className="mt-3 space-y-1">
               <input
                 type="number"
                 step="0.1"
-                min="90"
-                max="115"
+                min="80"
+                max="120"
                 value={vitals.temperature}
-                onChange={(e) => handleManualChange('temperature', parseFloat(e.target.value) || 98.6)}
+                onChange={(e) => handleManualChange('temperature', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
                 placeholder="Temp °F"
                 data-testid="input-temperature"
@@ -311,13 +278,7 @@ export default function VitalsDashboardClient() {
           {/* Heart Rate Card */}
           <div
             data-testid="vital-card-heartrate"
-            className={`p-5 rounded-3xl bg-white border transition-all ${
-              evalResult?.heartRate.status === 'ANOMALY_ERROR'
-                ? 'border-2 border-red-500 bg-red-50/50 shadow-md shadow-red-200'
-                : evalResult?.heartRate.status === 'MILD_ABNORMAL'
-                ? 'border-2 border-amber-400 bg-amber-50/50'
-                : 'border-slate-200'
-            }`}
+            className={`p-5 rounded-3xl border transition-all ${cardBorderClass(evalResult?.heartRate.status)}`}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -335,10 +296,10 @@ export default function VitalsDashboardClient() {
             <div className="mt-3 space-y-1">
               <input
                 type="number"
-                min="20"
-                max="240"
+                min="10"
+                max="250"
                 value={vitals.heartRate}
-                onChange={(e) => handleManualChange('heartRate', parseInt(e.target.value) || 72)}
+                onChange={(e) => handleManualChange('heartRate', parseInt(e.target.value, 10) || 0)}
                 className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
                 placeholder="Heart Rate BPM"
                 data-testid="input-heartrate"
@@ -356,13 +317,7 @@ export default function VitalsDashboardClient() {
           {/* SpO2 Card */}
           <div
             data-testid="vital-card-spo2"
-            className={`p-5 rounded-3xl bg-white border transition-all ${
-              evalResult?.spo2.status === 'ANOMALY_ERROR'
-                ? 'border-2 border-red-500 bg-red-50/50 shadow-md shadow-red-200'
-                : evalResult?.spo2.status === 'MILD_ABNORMAL'
-                ? 'border-2 border-amber-400 bg-amber-50/50'
-                : 'border-slate-200'
-            }`}
+            className={`p-5 rounded-3xl border transition-all ${cardBorderClass(evalResult?.spo2.status)}`}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -380,10 +335,10 @@ export default function VitalsDashboardClient() {
             <div className="mt-3 space-y-1">
               <input
                 type="number"
-                min="30"
+                min="0"
                 max="100"
                 value={vitals.spo2}
-                onChange={(e) => handleManualChange('spo2', parseInt(e.target.value) || 98)}
+                onChange={(e) => handleManualChange('spo2', parseInt(e.target.value, 10) || 0)}
                 className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
                 placeholder="SpO2 %"
                 data-testid="input-spo2"
@@ -398,13 +353,7 @@ export default function VitalsDashboardClient() {
           {/* Blood Pressure Card */}
           <div
             data-testid="vital-card-bp"
-            className={`p-5 rounded-3xl bg-white border transition-all ${
-              evalResult?.bp.status === 'ANOMALY_ERROR'
-                ? 'border-2 border-red-500 bg-red-50/50 shadow-md shadow-red-200'
-                : evalResult?.bp.status === 'MILD_ABNORMAL'
-                ? 'border-2 border-amber-400 bg-amber-50/50'
-                : 'border-slate-200'
-            }`}
+            className={`p-5 rounded-3xl border transition-all ${cardBorderClass(evalResult?.bp.status)}`}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -422,20 +371,20 @@ export default function VitalsDashboardClient() {
             <div className="mt-3 grid grid-cols-2 gap-1">
               <input
                 type="number"
-                min="50"
-                max="240"
+                min="40"
+                max="300"
                 value={vitals.sysBP}
-                onChange={(e) => handleManualChange('sysBP', parseInt(e.target.value) || 120)}
+                onChange={(e) => handleManualChange('sysBP', parseInt(e.target.value, 10) || 0)}
                 className="w-full px-2 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
                 placeholder="Sys"
                 data-testid="input-sysbp"
               />
               <input
                 type="number"
-                min="30"
-                max="150"
+                min="20"
+                max="200"
                 value={vitals.diaBP}
-                onChange={(e) => handleManualChange('diaBP', parseInt(e.target.value) || 80)}
+                onChange={(e) => handleManualChange('diaBP', parseInt(e.target.value, 10) || 0)}
                 className="w-full px-2 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-teal-500 outline-none"
                 placeholder="Dia"
                 data-testid="input-diabp"
@@ -451,7 +400,7 @@ export default function VitalsDashboardClient() {
         {/* Proceed Gate Footer */}
         <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
           <button
-            onClick={() => runSensorRead('normal')}
+            onClick={runSensorRead}
             disabled={isReading}
             data-testid="read-sensors-btn"
             className="w-full sm:w-auto py-3.5 px-6 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer"

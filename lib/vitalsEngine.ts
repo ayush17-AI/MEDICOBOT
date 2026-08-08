@@ -6,7 +6,7 @@ export interface VitalsInput {
   diaBP: number;       // mmHg
 }
 
-export type VitalsStatus = 'NORMAL' | 'MILD_ABNORMAL' | 'ANOMALY_ERROR';
+export type VitalsStatus = 'NORMAL' | 'MEDIUM' | 'SEVERE' | 'INVALID';
 
 export interface VitalsEvalResult {
   temperature: { value: number; unit: string; status: VitalsStatus; message: string };
@@ -19,77 +19,133 @@ export interface VitalsEvalResult {
 }
 
 /**
- * Vitals Biological Anomaly & Threshold Engine:
- * Evaluates vitals against physiological bounds.
- * Normal: Temp 97-99.5°F, SpO2 95-100%, HR 60-100 BPM
- * Sick / Mild: Temp 99.6-104.9°F, SpO2 90-94%, HR 101-180 BPM
- * Anomaly Error: Temp > 105°F (e.g. 110°F) or < 92°F, SpO2 < 50% or > 100%, HR > 180 BPM or < 35 BPM
+ * Vitals Biological Anomaly & Medical Threshold Engine:
+ * Evaluates human biological vitals against clinical reference ranges.
+ *
+ * 1. BODY TEMPERATURE (°F):
+ *    < 90.0°F or > 108.0°F: INVALID ➔ "⚠️ Invalid Biological Reading (Out of Human Bounds)"
+ *    95.0°F - 99.0°F: NORMAL ➔ "✓ Normal Body Temperature"
+ *    99.1°F - 102.0°F: MEDIUM ➔ "⚠️ Mild / Moderate Fever"
+ *    102.1°F - 108.0°F: SEVERE ➔ "🚨 High / Critical Fever"
+ *
+ * 2. HEART RATE (BPM):
+ *    < 30 BPM or > 220 BPM: INVALID ➔ "⚠️ Invalid Reading"
+ *    60 - 100 BPM: NORMAL ➔ "✓ Normal Resting Heart Rate"
+ *    50 - 59 BPM or 101 - 120 BPM: MEDIUM ➔ "⚠️ Mild Bradycardia / Tachycardia"
+ *    < 50 BPM or > 120 BPM: SEVERE ➔ "🚨 Critical Heart Rate Anomaly"
+ *
+ * 3. SPO2 OXYGEN (%):
+ *    < 50% or > 100%: INVALID ➔ "⚠️ Invalid Sensor Value"
+ *    95% - 100%: NORMAL ➔ "✓ Normal Oxygen Saturation"
+ *    90% - 94%: MEDIUM ➔ "⚠️ Moderate Hypoxia Warning"
+ *    < 90%: SEVERE ➔ "🚨 Critical Hypoxemia Emergency"
+ *
+ * 4. BLOOD PRESSURE (MMHG):
+ *    Systolic < 70 / > 240 OR Diastolic < 40 / > 140: INVALID ➔ "⚠️ Invalid BP Reading"
+ *    Systolic 90-120 AND Diastolic 60-80: NORMAL ➔ "✓ Normal Blood Pressure"
+ *    Systolic 121-139 OR Diastolic 81-89: MEDIUM ➔ "⚠️ Prehypertension / Elevated BP"
+ *    Systolic >= 140 OR Diastolic >= 90: SEVERE ➔ "🚨 Critical Hypertension Risk"
  */
 export function evaluateVitalsEngine(vitals: VitalsInput): VitalsEvalResult {
   const { temperature, heartRate, spo2, sysBP, diaBP } = vitals;
 
-  // Temperature Evaluation (°F)
+  // 1. Temperature Evaluation (°F)
   let tempStatus: VitalsStatus = 'NORMAL';
-  let tempMsg = 'Normal Body Temperature';
-  if (temperature > 105.0 || temperature < 92.0) {
-    tempStatus = 'ANOMALY_ERROR';
-    tempMsg = `Extreme Temperature Anomaly (${temperature}°F)`;
-  } else if (temperature >= 99.6 || temperature <= 96.9) {
-    tempStatus = 'MILD_ABNORMAL';
-    tempMsg = temperature >= 99.6 ? `Elevated Fever (${temperature}°F)` : `Low Body Temp (${temperature}°F)`;
+  let tempMsg = '✓ Normal Body Temperature';
+  if (temperature < 90.0 || temperature > 108.0) {
+    tempStatus = 'INVALID';
+    tempMsg = '⚠️ Invalid Biological Reading (Out of Human Bounds)';
+  } else if (temperature >= 102.1 && temperature <= 108.0) {
+    tempStatus = 'SEVERE';
+    tempMsg = '🚨 High / Critical Fever';
+  } else if (temperature >= 99.1 && temperature <= 102.0) {
+    tempStatus = 'MEDIUM';
+    tempMsg = '⚠️ Mild / Moderate Fever';
+  } else if (temperature >= 95.0 && temperature <= 99.0) {
+    tempStatus = 'NORMAL';
+    tempMsg = '✓ Normal Body Temperature';
+  } else {
+    // 90.0 - 94.9 (Hypothermia) or edge cases
+    tempStatus = 'MEDIUM';
+    tempMsg = `⚠️ Hypothermia / Low Body Temp (${temperature}°F)`;
   }
 
-  // Heart Rate Evaluation (BPM)
+  // 2. Heart Rate Evaluation (BPM)
   let hrStatus: VitalsStatus = 'NORMAL';
-  let hrMsg = 'Normal Heart Rate';
-  if (heartRate > 180 || heartRate < 35) {
-    hrStatus = 'ANOMALY_ERROR';
-    hrMsg = `Extreme Heart Rate Anomaly (${heartRate} BPM)`;
-  } else if (heartRate > 100 || heartRate < 60) {
-    hrStatus = 'MILD_ABNORMAL';
-    hrMsg = heartRate > 100 ? `Tachycardia (${heartRate} BPM)` : `Bradycardia (${heartRate} BPM)`;
+  let hrMsg = '✓ Normal Resting Heart Rate';
+  if (heartRate < 30 || heartRate > 220) {
+    hrStatus = 'INVALID';
+    hrMsg = '⚠️ Invalid Reading';
+  } else if (heartRate < 50 || heartRate > 120) {
+    hrStatus = 'SEVERE';
+    hrMsg = '🚨 Critical Heart Rate Anomaly';
+  } else if ((heartRate >= 50 && heartRate <= 59) || (heartRate >= 101 && heartRate <= 120)) {
+    hrStatus = 'MEDIUM';
+    hrMsg = '⚠️ Mild Bradycardia / Tachycardia';
+  } else {
+    hrStatus = 'NORMAL';
+    hrMsg = '✓ Normal Resting Heart Rate';
   }
 
-  // SpO2 Evaluation (%)
+  // 3. SpO2 Evaluation (%)
   let spo2Status: VitalsStatus = 'NORMAL';
-  let spo2Msg = 'Normal Oxygen Saturation';
-  if (spo2 > 100 || spo2 < 50) {
-    spo2Status = 'ANOMALY_ERROR';
-    spo2Msg = `Impossible SpO2 Reading (${spo2}%)`;
-  } else if (spo2 < 95) {
-    spo2Status = 'MILD_ABNORMAL';
-    spo2Msg = `Low Oxygen Level (${spo2}%)`;
+  let spo2Msg = '✓ Normal Oxygen Saturation';
+  if (spo2 < 50 || spo2 > 100) {
+    spo2Status = 'INVALID';
+    spo2Msg = '⚠️ Invalid Sensor Value';
+  } else if (spo2 < 90) {
+    spo2Status = 'SEVERE';
+    spo2Msg = '🚨 Critical Hypoxemia Emergency';
+  } else if (spo2 >= 90 && spo2 <= 94) {
+    spo2Status = 'MEDIUM';
+    spo2Msg = '⚠️ Moderate Hypoxia Warning';
+  } else {
+    spo2Status = 'NORMAL';
+    spo2Msg = '✓ Normal Oxygen Saturation';
   }
 
-  // Blood Pressure Evaluation (mmHg)
+  // 4. Blood Pressure Evaluation (mmHg)
   let bpStatus: VitalsStatus = 'NORMAL';
-  let bpMsg = 'Normal Blood Pressure';
-  if (sysBP > 200 || sysBP < 60 || diaBP > 120 || diaBP < 40) {
-    bpStatus = 'ANOMALY_ERROR';
-    bpMsg = `Critical BP Reading (${sysBP}/${diaBP} mmHg)`;
-  } else if (sysBP >= 130 || diaBP >= 85) {
-    bpStatus = 'MILD_ABNORMAL';
-    bpMsg = `High Blood Pressure (${sysBP}/${diaBP} mmHg)`;
+  let bpMsg = '✓ Normal Blood Pressure';
+  if (sysBP < 70 || sysBP > 240 || diaBP < 40 || diaBP > 140) {
+    bpStatus = 'INVALID';
+    bpMsg = '⚠️ Invalid BP Reading';
+  } else if (sysBP >= 140 || diaBP >= 90) {
+    bpStatus = 'SEVERE';
+    bpMsg = '🚨 Critical Hypertension Risk';
+  } else if ((sysBP >= 121 && sysBP <= 139) || (diaBP >= 81 && diaBP <= 89)) {
+    bpStatus = 'MEDIUM';
+    bpMsg = '⚠️ Prehypertension / Elevated BP';
+  } else {
+    bpStatus = 'NORMAL';
+    bpMsg = '✓ Normal Blood Pressure';
   }
 
   const isAnomaly =
-    tempStatus === 'ANOMALY_ERROR' ||
-    hrStatus === 'ANOMALY_ERROR' ||
-    spo2Status === 'ANOMALY_ERROR' ||
-    bpStatus === 'ANOMALY_ERROR';
+    tempStatus === 'INVALID' ||
+    hrStatus === 'INVALID' ||
+    spo2Status === 'INVALID' ||
+    bpStatus === 'INVALID';
 
-  const isMild =
-    tempStatus === 'MILD_ABNORMAL' ||
-    hrStatus === 'MILD_ABNORMAL' ||
-    spo2Status === 'MILD_ABNORMAL' ||
-    bpStatus === 'MILD_ABNORMAL';
+  const isSevere =
+    tempStatus === 'SEVERE' ||
+    hrStatus === 'SEVERE' ||
+    spo2Status === 'SEVERE' ||
+    bpStatus === 'SEVERE';
+
+  const isMedium =
+    tempStatus === 'MEDIUM' ||
+    hrStatus === 'MEDIUM' ||
+    spo2Status === 'MEDIUM' ||
+    bpStatus === 'MEDIUM';
 
   let overallStatus: VitalsStatus = 'NORMAL';
-  if (isAnomaly) overallStatus = 'ANOMALY_ERROR';
-  else if (isMild) overallStatus = 'MILD_ABNORMAL';
+  if (isAnomaly) overallStatus = 'INVALID';
+  else if (isSevere) overallStatus = 'SEVERE';
+  else if (isMedium) overallStatus = 'MEDIUM';
 
   const alertMessage = isAnomaly
-    ? 'Humanly Impossible Reading Detected (Possible Hardware Error). Please re-enter/re-read vitals.'
+    ? 'Invalid Biological Reading Detected (Out of Human Bounds). Please re-enter/re-read vitals.'
     : null;
 
   return {
