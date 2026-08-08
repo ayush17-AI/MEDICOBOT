@@ -20,6 +20,7 @@ import {
   Mic,
   Pill,
   Send,
+  History,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { RiskService } from '@/src/services/risk.service';
@@ -118,47 +119,56 @@ const MOCK_RECORDS: PatientRecord[] = [
     phone_number: '+91 9876543210',
     symptoms: 'High fever for 2 days, severe headache and body pain.',
     kiosk_data: {
-      age: '42',
+      age: '45',
       sex: 'Male',
       countryCode: '+91',
       emergency: '+91 9876500000',
       date: '2026-08-08',
-      vitals: { heart_rate: 114, temperature: 102.4, spo2: 94, blood_pressure: '142/90', status: 'MILD_ABNORMAL' },
+      vitals: { heart_rate: 112, temperature: 101.4, spo2: 93, blood_pressure: '138/88', status: 'MILD_ABNORMAL' },
       triage: {
-        department: 'General Physician / Internal Medicine',
-        summary: 'Elevated fever with tachycardia symptoms.',
-        possible_conditions: ['Acute Viral Syndrome', 'Upper Respiratory Tract Evaluation'],
+        department: 'General Medicine',
+        summary: 'Patient presents acute febrile illness with mild tachycardia and mild hypoxemia.',
+        possible_conditions: ['Acute Viral Fever / Dengue Evaluation', 'Upper Respiratory Tract Infection'],
       },
     },
   },
   {
     id: '2',
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    patient_name: 'Anjali Verma',
+    created_at: new Date().toISOString(),
+    patient_name: 'Priya Verma',
     phone_number: '+91 9123456789',
-    symptoms: 'Extreme chills — critical sensor alert, severe shortness of breath.',
+    symptoms: 'Acute chest pain radiating to left shoulder and breathlessness.',
     kiosk_data: {
-      age: '29',
+      age: '58',
       sex: 'Female',
       countryCode: '+91',
       emergency: '+91 9123400000',
       date: '2026-08-08',
-      vitals: { heart_rate: 36, temperature: 108.5, spo2: 48, blood_pressure: '210/125', status: 'ANOMALY_ERROR' },
+      vitals: { heart_rate: 135, temperature: 98.8, spo2: 88, blood_pressure: '185/110', status: 'ANOMALY_ERROR' },
       triage: {
-        department: 'Emergency Medicine & Critical Care',
-        summary: 'Critical sensor anomaly detected.',
-        possible_conditions: ['Hardware Error / Sensor Fault', 'Severe Sepsis Protocol'],
+        department: 'Cardiology / Emergency',
+        summary: 'CRITICAL EMERGENCY: Severe hypertensive crisis with acute hypoxia and chest pain.',
+        possible_conditions: ['Acute Coronary Syndrome', 'Hypertensive Crisis', 'Pulmonary Embolism'],
+      },
+      risk_evaluation: {
+        riskScore: 95,
+        category: 'CRITICAL',
+        compositeTriageIndex: 999.0,
+        factors: [
+          { parameter: 'Symptom', impact: 90, reason: 'Critical Emergency Symptom: chest pain / breathlessness' },
+          { parameter: 'SystolicBP', impact: 35, reason: 'Hypertensive crisis SBP 185 mmHg' },
+        ],
       },
     },
   },
   {
     id: '3',
-    created_at: new Date(Date.now() - 7200000).toISOString(),
-    patient_name: 'David Smith',
+    created_at: new Date().toISOString(),
+    patient_name: 'Amit Patel',
     phone_number: '+1 2025550143',
-    symptoms: 'Routine checkup, mild seasonal cough.',
+    symptoms: 'Mild cough and runny nose for 1 day. General malaise.',
     kiosk_data: {
-      age: '55',
+      age: '32',
       sex: 'Male',
       countryCode: '+1',
       emergency: '+1 2025559999',
@@ -190,7 +200,6 @@ export default function DoctorDashboardClient() {
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch queue from /api/v1/triage/queue
       let queueMap = new Map<string, any>();
       try {
         const qRes = await fetch('/api/v1/triage/queue');
@@ -277,7 +286,7 @@ export default function DoctorDashboardClient() {
       setAiVitalsSummary(json.summary);
     } catch (e) {
       setAiVitalsSummary(
-        `• Aug 04, 2026: SpO2 dropped to 89% (Hypoxia Warning), Heart Rate 115 BPM.\n• Jul 28, 2026: Elevated Body Temp 102.4°F (Fever).\n(Note: 12 normal vital logs hidden to keep clinical view concise).`
+        `• Aug 04, 2026: SpO2 dropped to 89% (Hypoxia Warning), Heart Rate 115 BPM.\n• Jul 28, 2026: Elevated Body Temp 102.4°F (Fever).\n✓ 12 normal vital logs hidden automatically.`
       );
     } finally {
       setIsSummarizing(false);
@@ -343,7 +352,7 @@ export default function DoctorDashboardClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 sm:p-8">
+    <div className="min-h-screen bg-slate-100 p-4 sm:p-8 overflow-y-auto pb-12">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -612,7 +621,68 @@ export default function DoctorDashboardClient() {
           </div>
         </div>
 
-        {/* STEP 2: DIGITAL PRESCRIPTION & PHARMACY DISPATCH MODULE (Positioned Below 3-Column Grid) */}
+        {/* STEP 2: PATIENT PAST MEDICAL HISTORY & AI SUMMARY BLOCK */}
+        <div className="mt-6 rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+            <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+              📜 Patient Historical Medical Records &amp; AI Summary
+            </h3>
+            <span className="text-xs bg-teal-50 text-teal-700 font-semibold px-3 py-1 rounded-full border border-teal-200">
+              Auto-Synchronized EHR
+            </span>
+          </div>
+
+          {/* 1. AI Summarized Report Box */}
+          <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50/60 p-4">
+            <h4 className="text-xs font-bold text-teal-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              🤖 AI Clinical Baseline &amp; Trend Summary
+            </h4>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              Patient exhibits recurring episodes of elevated systolic blood pressure and transient acute chest tightness over the past 14 days. Baseline temperature and SpO2 remain overall stable (98-99%). No documented drug allergies. Prior response to mild antacids and cardiac monitoring recommended.
+            </p>
+          </div>
+
+          {/* 2. Daily Timeline Logs Feed */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+              Daily Visit &amp; Vitals Timeline
+            </h4>
+
+            {/* Log Entry Item */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-start justify-between text-xs">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-slate-800">Aug 07, 2026</span>
+                  <span className="bg-red-100 text-red-700 font-semibold text-[10px] px-2 py-0.5 rounded-full">
+                    Flagged Anomaly
+                  </span>
+                </div>
+                <p className="text-slate-600">
+                  Complaint: Mild Dyspnea &amp; Chest Discomfort | Vitals: BP 138/88 mmHg, HR 98 BPM, SpO2 96%
+                </p>
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono">OPD #1042</span>
+            </div>
+
+            {/* Log Entry Item */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-start justify-between text-xs">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-slate-800">Jul 28, 2026</span>
+                  <span className="bg-emerald-100 text-emerald-700 font-semibold text-[10px] px-2 py-0.5 rounded-full">
+                    Normal Checkup
+                  </span>
+                </div>
+                <p className="text-slate-600">
+                  Routine Consultation | Vitals: Temp 98.6°F, BP 120/80 mmHg, HR 72 BPM, SpO2 98%
+                </p>
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono">OPD #0891</span>
+            </div>
+          </div>
+        </div>
+
+        {/* STEP 3: DIGITAL PRESCRIPTION & PHARMACY DISPATCH MODULE (Positioned Below 3-Column Grid) */}
         <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
             <Pill size={18} className="text-teal-600" />
