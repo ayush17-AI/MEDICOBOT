@@ -1,85 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { RiskService } from "@/src/services/risk.service";
+import { RiskService, calculateVitalsScore, calculateFinalRiskScore } from "@/src/services/risk.service";
 
-describe("RiskService.evaluate", () => {
-  it("returns 0 and no factors for an empty payload", () => {
-    const { riskScore, factors } = RiskService.evaluate({});
-    expect(riskScore).toBe(0);
-    expect(factors).toHaveLength(0);
+describe("RiskService & Mathematical Risk Scoring Engine", () => {
+  it("calculates vitals score correctly for normal & abnormal vitals", () => {
+    expect(calculateVitalsScore({})).toBe(0);
+    expect(calculateVitalsScore({ spo2: 98, heartRate: 72, systolicBP: 120, temperature: 98.6 })).toBe(0);
+    expect(calculateVitalsScore({ spo2: 85 })).toBe(40);
+    expect(calculateVitalsScore({ spo2: 93 })).toBe(20);
+    expect(calculateVitalsScore({ heartRate: 130 })).toBe(30);
+    expect(calculateVitalsScore({ heartRate: 45 })).toBe(30);
+    expect(calculateVitalsScore({ systolicBP: 150 })).toBe(30);
+    expect(calculateVitalsScore({ temperature: 103 })).toBe(15);
   });
 
-  it("scores critical hypoxia correctly", () => {
-    const { riskScore, factors } = RiskService.evaluate({ spo2: 85 });
-    expect(riskScore).toBe(50);
-    expect(factors[0]).toMatchObject({ parameter: "SpO2", impact: 50 });
+  it("calculates final risk score using weighted formula (vitals * 0.4 + llm * 0.6)", () => {
+    // Normal vitals (0) + LLM score (100) => 0*0.4 + 100*0.6 = 60
+    expect(calculateFinalRiskScore(0, 100)).toBe(60);
+
+    // Vitals score (100) + LLM score (100) => 100*0.4 + 100*0.6 = 100
+    expect(calculateFinalRiskScore(100, 100)).toBe(100);
+
+    // Vitals score (50) + LLM score (50) => 50*0.4 + 50*0.6 = 50
+    expect(calculateFinalRiskScore(50, 50)).toBe(50);
   });
 
-  it("scores hypoxia risk (<92%) correctly", () => {
-    const { riskScore } = RiskService.evaluate({ spo2: 90 });
-    expect(riskScore).toBe(30);
-  });
-
-  it("does not score SpO2 at the boundary of normal (93)", () => {
-    const { riskScore } = RiskService.evaluate({ spo2: 93 });
-    expect(riskScore).toBe(0);
-  });
-
-  it("scores severe dysrhythmia for very high and very low HR", () => {
-    expect(RiskService.evaluate({ heartRate: 140 }).riskScore).toBe(30);
-    expect(RiskService.evaluate({ heartRate: 35 }).riskScore).toBe(30);
-  });
-
-  it("scores abnormal HR band correctly", () => {
-    expect(RiskService.evaluate({ heartRate: 110 }).riskScore).toBe(20);
-    expect(RiskService.evaluate({ heartRate: 45 }).riskScore).toBe(20);
-  });
-
-  it("scores hypertensive crisis / severe hypotension", () => {
-    expect(RiskService.evaluate({ systolicBP: 185 }).riskScore).toBe(35);
-    expect(RiskService.evaluate({ systolicBP: 78 }).riskScore).toBe(35);
-  });
-
-  it("scores elevated/low SBP band correctly", () => {
-    expect(RiskService.evaluate({ systolicBP: 150 }).riskScore).toBe(20);
-    expect(RiskService.evaluate({ systolicBP: 85 }).riskScore).toBe(20);
-  });
-
-  it("scores high fever (>102°F) correctly", () => {
-    const { riskScore, factors } = RiskService.evaluate({ temperature: 103 });
-    expect(riskScore).toBe(15);
-    expect(factors[0]).toMatchObject({ parameter: "Temperature", impact: 15 });
-  });
-
-  it("triggers 90 point critical override for heart attack", () => {
-    const { riskScore, factors } = RiskService.evaluate({
-      symptomsText: "Patient complaining of severe chest pressure and possible heart attack",
-    });
-    expect(riskScore).toBe(90);
-    expect(factors[0].reason).toContain("Critical Cardiac");
-  });
-
-  it("triggers 90 point critical override for infarction and breathlessness", () => {
-    const { riskScore } = RiskService.evaluate({
-      symptoms: ["acute myocardial infarction", "severe breathlessness"],
-    });
-    expect(riskScore).toBe(90);
-  });
-
-  it("triggers 90 point critical override for unconscious patient", () => {
-    const { riskScore } = RiskService.evaluate({
-      symptomsText: "Patient is unconscious and unresponsive",
-    });
-    expect(riskScore).toBe(90);
-  });
-
-  it("caps the total score at 100", () => {
-    const { riskScore } = RiskService.evaluate({
-      spo2: 80, // 50
-      heartRate: 150, // 30
-      systolicBP: 190, // 35
-      symptomsText: "heart attack", // 90
-    });
-    expect(riskScore).toBe(100);
+  it("evaluates risk score with RiskService.evaluate", () => {
+    const { riskScore, factors } = RiskService.evaluate({ spo2: 85 }, 100);
+    // Vitals score = 40. LLM score = 100. Final = 40*0.4 + 100*0.6 = 16 + 60 = 76
+    expect(riskScore).toBe(76);
+    expect(factors).toHaveLength(2);
+    expect(factors[0]).toMatchObject({ parameter: "SpO2", impact: 40 });
   });
 
   it("handles partial/missing vitals without throwing", () => {
