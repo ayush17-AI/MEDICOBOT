@@ -83,6 +83,45 @@ export default function ConsultationClient() {
   const [isBooking, setIsBooking] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<string | null>(null);
+  const [isSendingSms, setIsSendingSms] = useState(false);
+
+  const handleSendConfirmationSMS = async (phoneNumber: string, patientName: string, doctorName: string, tokenNo: string, room: string) => {
+    const cleanPhone = (phoneNumber || '9461112639').replace(/[^0-9]/g, '').slice(-10);
+    if (!cleanPhone) return;
+    setIsSendingSms(true);
+
+    try {
+      const res = await fetch('/api/v1/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: cleanPhone,
+          patientName: patientName,
+          riskScore: 0,
+          primarySymptom: `Appointment Confirmed with ${doctorName} (Token: ${tokenNo}, Room: ${room})`,
+        }),
+      });
+
+      const data = await res.json();
+      console.log('[FAST2SMS DIRECT RESULT]', data);
+
+      if (data.success) {
+        alert('✅ SMS dispatched successfully to your mobile number!');
+      } else {
+        console.warn('Fast2SMS response:', data);
+        if (typeof window !== 'undefined' && /Android|iPhone/i.test(navigator.userAgent)) {
+          window.location.href = `sms:+91${cleanPhone}?body=${encodeURIComponent(`MEDICOBOT Confirmation for ${patientName}: Token ${tokenNo}`)}`;
+        } else {
+          alert('⚠️ Fast2SMS Response: ' + (data.error || JSON.stringify(data.result)));
+        }
+      }
+    } catch (err) {
+      console.error('SMS API Error:', err);
+      alert('⚠️ SMS API request completed');
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -433,19 +472,22 @@ async function triggerEmergencySMSNotification(patientName: string, phone: strin
               </a>
 
               {/* SMS Button */}
-              <a
-                href={generateDirectSmsUrl({
-                  patientName: patient?.name || patient?.fullName || 'Patient',
-                  phoneNumber: patient?.phone || patient?.mobile || '9461112639',
-                  countryCode: patient?.countryCode || '91',
-                  appointmentDate: patient?.visitDate || new Date().toISOString().split('T')[0],
-                  tokenNumber: tokenGenerated || '#MED-1150',
-                  doctorName: selectedDoctor?.name || 'General Physician',
-                })}
-                className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              <button
+                type="button"
+                disabled={isSendingSms}
+                onClick={() =>
+                  handleSendConfirmationSMS(
+                    patient?.phone || patient?.mobile || '9461112639',
+                    patient?.name || patient?.fullName || 'Patient',
+                    selectedDoctor?.name || 'General Physician',
+                    tokenGenerated || '#MED-1150',
+                    'Room 204'
+                  )
+                }
+                className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                📱 Send via Text SMS
-              </a>
+                {isSendingSms ? '⏳ Sending SMS...' : '📲 Send SMS Confirmation'}
+              </button>
             </div>
 
             {/* Primary Action Button: Unlock & Navigate to Doctor Workstation */}

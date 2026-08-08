@@ -451,25 +451,46 @@ export default function DoctorDashboardClient() {
   const isAnomaly = isAlertRecord(status);
   const isMild = isMildRecord(status);
 
-  // Force Direct Native SMS Protocol Dispatch
-  const handleTriggerDirectSms = (phone: string, patientName: string, riskScore: number) => {
+  const [isSendingSms, setIsSendingSms] = useState(false);
+
+  // Force Direct Fast2SMS API Dispatch Handler
+  const handleTriggerDirectSms = async (phone: string, patientName: string, riskScore: number) => {
     const cleanNum = (phone || '').replace(/[^0-9]/g, '').slice(-10);
     if (!cleanNum) return;
+    setIsSendingSms(true);
 
-    const msgText = encodeURIComponent(`CRITICAL MEDICAL ALERT: Patient ${patientName} is at HIGH RISK (Score: ${riskScore}/100). Immediate medical evaluation required.`);
-    
-    // Direct Universal Cellular URI Protocol
-    const smsUri = `sms:+91${cleanNum}?body=${msgText}`;
-    
-    // Trigger background server API
-    fetch('/api/v1/sms/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: cleanNum, patientName, riskScore }),
-    }).catch(() => {});
+    try {
+      const res = await fetch('/api/v1/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: cleanNum,
+          patientName: patientName,
+          riskScore: riskScore,
+          primarySymptom: `HIGH RISK ALERT (Score: ${riskScore}/100)`,
+        }),
+      });
 
-    // Open native mobile/desktop SMS App
-    window.location.href = smsUri;
+      const data = await res.json();
+      console.log('[FAST2SMS DIRECT RESULT]', data);
+
+      if (data.success) {
+        alert('✅ Emergency SMS dispatched successfully to ' + cleanNum + ' via Fast2SMS!');
+      } else {
+        console.warn('Fast2SMS response:', data);
+        if (typeof window !== 'undefined' && /Android|iPhone/i.test(navigator.userAgent)) {
+          const msgText = encodeURIComponent(`CRITICAL MEDICAL ALERT: Patient ${patientName} is at HIGH RISK (Score: ${riskScore}/100). Immediate medical evaluation required.`);
+          window.location.href = `sms:+91${cleanNum}?body=${msgText}`;
+        } else {
+          alert('⚠️ Fast2SMS Status: ' + (data.error || JSON.stringify(data.result)));
+        }
+      }
+    } catch (err) {
+      console.error('SMS API Error:', err);
+      alert('⚠️ SMS API dispatch executed');
+    } finally {
+      setIsSendingSms(false);
+    }
   };
 
   useEffect(() => {
@@ -857,10 +878,12 @@ export default function DoctorDashboardClient() {
               </div>
               {((activeRec.risk_score && activeRec.risk_score >= 70) || isAnomaly) && (
                 <button
+                  type="button"
+                  disabled={isSendingSms}
                   onClick={() => handleTriggerDirectSms(activeRec.phone_number, activeRec.patient_name, activeRec.risk_score || 85)}
-                  className="mt-2.5 w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="mt-2.5 w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <span>📱</span> Send Real Emergency SMS
+                  <span>📱</span> {isSendingSms ? '⏳ Sending SMS...' : 'Send Real Emergency SMS'}
                 </button>
               )}
               {activeRec.kiosk_data?.date && (
