@@ -88,11 +88,14 @@ export default function SymptomsClient() {
         const patientId = patient?.id || patient?.phone || patient?.name || `pt_${Date.now()}`;
         const rawSymptoms = symptoms.trim();
         const fullText = `${rawSymptoms} ${triage?.summary || ''} ${triage?.clinical_summary || ''}`.trim();
+        const symptomLLMScore = typeof triage?.symptomLLMScore === 'number' ? triage.symptomLLMScore : 20;
+
         const riskRes = await fetch('/api/v1/risk/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             patientId,
+            symptomLLMScore,
             vitals: {
               spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
               heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
@@ -113,6 +116,7 @@ export default function SymptomsClient() {
       if (!riskResult) {
         const rawSymptoms = symptoms.trim();
         const fullText = `${rawSymptoms} ${triage?.summary || ''} ${triage?.clinical_summary || ''}`.trim();
+        const symptomLLMScore = typeof triage?.symptomLLMScore === 'number' ? triage.symptomLLMScore : 20;
         const evaluated = RiskService.evaluate({
           spo2: vitals?.spo2 ? Number(vitals.spo2) : undefined,
           heartRate: vitals?.heart_rate || vitals?.heartRate ? Number(vitals.heart_rate || vitals.heartRate) : undefined,
@@ -120,7 +124,7 @@ export default function SymptomsClient() {
           temperature: vitals?.temperature ? Number(vitals.temperature) : undefined,
           symptoms: [rawSymptoms],
           symptomsText: fullText,
-        });
+        }, symptomLLMScore);
         const cat = RiskService.categorize(evaluated.riskScore);
         const comp = RiskService.computeCompositeTriageIndex(evaluated.riskScore, cat, new Date().toISOString());
         riskResult = {

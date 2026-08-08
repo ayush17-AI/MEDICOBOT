@@ -93,7 +93,8 @@ Return ONLY a valid JSON object matching this exact schema:
         symptomsText: symptomsTextRaw,
       };
 
-      const { riskScore, factors } = RiskService.evaluate(vitalsInput);
+      const symptomLlmScore = typeof body.symptomLLMScore === 'number' ? body.symptomLLMScore : undefined;
+      const { riskScore, factors } = RiskService.evaluate(vitalsInput, symptomLlmScore);
       const category = RiskService.categorize(riskScore);
       const compositeTriageIndex = RiskService.computeCompositeTriageIndex(
         riskScore,

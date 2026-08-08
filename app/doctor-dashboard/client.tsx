@@ -594,7 +594,7 @@ export default function DoctorDashboardClient() {
                   return (
                     <>
                       <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
-                        Risk Factors &amp; Priority Index ({activeRisk.compositeTriageIndex === 999.0 ? '999.0 Emergency Override' : `${activeRisk.compositeTriageIndex.toFixed(1)} pts`})
+                        Clinical Risk Factors
                       </span>
                       <div className="space-y-1.5">
                         {activeRisk.factors && activeRisk.factors.length > 0 ? (

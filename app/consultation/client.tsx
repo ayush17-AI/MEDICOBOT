@@ -279,7 +279,6 @@ export default function ConsultationClient() {
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
                 <div className="flex items-center justify-between text-slate-700 font-bold flex-wrap gap-2">
                   <span>Risk Score: <strong className="text-slate-900">{activeRisk.riskScore}/100</strong></span>
-                  <span>Composite Priority Index: <strong className="text-teal-700">{activeRisk.compositeTriageIndex === 999.0 ? '999.0 (Emergency Override)' : typeof activeRisk.compositeTriageIndex === 'number' ? activeRisk.compositeTriageIndex.toFixed(1) : activeRisk.compositeTriageIndex}</strong></span>
                 </div>
                 {(activeRisk.factors || activeRisk.riskFactors) && (activeRisk.factors || activeRisk.riskFactors).length > 0 ? (
                   <div className="space-y-1 pt-1">

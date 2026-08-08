@@ -6,6 +6,7 @@ export interface TriageResult {
   department: string;
   clinical_summary: string;
   possible_conditions: string[];
+  symptomLLMScore: number;
   provider: string;
 }
 
@@ -16,24 +17,15 @@ interface TriageRequestBody {
   lang?: "en" | "hi";
 }
 
-const SYSTEM_PROMPT = `You are MEDICOBOT Clinical AI Triage Engine, trained on emergency medical protocols.
+const SYSTEM_PROMPT = `You are a clinical triage AI. Evaluate the user's reported symptoms.
+Assign a symptom severity score between 0 and 100 based strictly on emergency clinical guidelines.
 
-ANALYZE SYMPTOMS WITH DEEP CLINICAL INTELLIGENCE:
-1. Department Mapping: Assign the most critical specialty department based on symptoms (e.g., Chest pain + Headache = Cardiology / Emergency Medicine / Neurology).
-2. DO NOT include any severity scores (Green/Red/Yellow).
-3. Identify 3-4 clinical "Possible Causes / Differential Conditions" considering all factors (e.g., Angina / Ischemic Cardiac Evaluation, Hypertensive Crisis, Migraine/Tension Headache with Stress, Gastroesophageal Acid Reflux).
-4. Provide a highly professional, 2-sentence Clinical Reasoning Summary explaining why these symptoms require this specialist.
-
-REQUIRED JSON OUTPUT FORMAT:
+REQUIRED JSON OUTPUT FORMAT ONLY:
 {
-  "department": "Cardiology / Emergency Medicine",
-  "clinical_summary": "Chest pain persisting for 2 days combined with an acute headache strongly warrants immediate cardiac and vascular evaluation to rule out hypertensive crisis or coronary issues alongside musculoskeletal or gastrointestinal causes.",
-  "possible_conditions": [
-    "Acute Coronary Assessment / Angina Evaluation",
-    "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
-    "Gastroesophageal Reflux Disease (GERD) / Esophageal Spasm",
-    "Tension / Vascular Headache"
-  ]
+  "symptomLLMScore": number,
+  "clinical_summary": "string describing clinical reasoning",
+  "department": "string specialty department",
+  "possible_conditions": ["string condition 1", "string condition 2", "string condition 3"]
 }`;
 
 function buildUserPrompt(body: TriageRequestBody): string {
@@ -42,7 +34,7 @@ Patient sex: ${body.sex ?? "unknown"}
 Reported symptoms (patient's own words, language=${body.lang ?? "en"}):
 "${body.symptomText}"
 
-Return the JSON triage object now.`;
+Return JSON ONLY now.`;
 }
 
 function extractJson(raw: string): unknown {
@@ -58,16 +50,12 @@ function coerceResult(parsed: unknown): Omit<TriageResult, "provider"> {
   const clinical_summary =
     typeof p.clinical_summary === "string"
       ? p.clinical_summary
-      : typeof p.reasoning_summary === "string"
-      ? p.reasoning_summary
-      : typeof p.clinical_reasoning === "string"
-      ? p.clinical_reasoning
+      : typeof p.clinicalReasoning === "string"
+      ? p.clinicalReasoning
       : "Immediate clinical evaluation assigned based on multi-system symptom presentation.";
   
   const possible_conditions = Array.isArray(p.possible_conditions)
     ? (p.possible_conditions as unknown[]).map(String).slice(0, 5)
-    : Array.isArray(p.differential_factors)
-    ? (p.differential_factors as unknown[]).map(String).slice(0, 5)
     : [
         "Acute Coronary Assessment / Angina Evaluation",
         "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
@@ -75,10 +63,14 @@ function coerceResult(parsed: unknown): Omit<TriageResult, "provider"> {
         "Vascular / Tension Headache Evaluation"
       ];
 
+  const rawScore = Number(p.symptomLLMScore ?? p.symptomScore ?? p.severityScore);
+  const symptomLLMScore = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, Math.round(rawScore))) : 20;
+
   return {
     department,
     clinical_summary,
     possible_conditions,
+    symptomLLMScore,
   };
 }
 
@@ -136,41 +128,42 @@ async function tryOpenAI(userPrompt: string): Promise<Omit<TriageResult, "provid
 
 function offlineMock(body: TriageRequestBody & { prompt?: string }): Omit<TriageResult, "provider"> {
   const text = (body.prompt || body.symptomText || "").toLowerCase();
-  if (/chest|breath|heart|headache/.test(text)) {
+  if (/chest|breath|heart|cardiac/.test(text)) {
     return {
       department: "Cardiology / Emergency Medicine",
       clinical_summary:
-        "Chest pain persisting for 2 days combined with headache symptoms strongly warrants immediate cardiac and vascular evaluation to rule out hypertensive crisis or coronary issues alongside musculoskeletal or gastrointestinal causes.",
+        "Chest pain or breathlessness symptoms strongly warrant immediate cardiac evaluation to rule out hypertensive crisis or acute coronary syndrome.",
       possible_conditions: [
         "Acute Coronary Assessment / Angina Evaluation",
         "Hypertensive Crisis / Elevated Blood Pressure Symptoms",
         "Gastroesophageal Reflux Disease (GERD) / Esophageal Spasm",
-        "Vascular / Tension Headache Evaluation"
       ],
+      symptomLLMScore: 85,
     };
   }
-  if (/stomach|abdomen|nausea|vomit/.test(text)) {
+  if (/headache|dizzy|faint|unconscious/.test(text)) {
     return {
-      department: "Gastroenterology",
+      department: "Neurology",
       clinical_summary:
-        "Reported abdominal distress and associated symptoms warrant a gastroenterology evaluation to assess digestive inflammation, acid reflux, or food sensitivity.",
+        "Neurological symptoms requiring urgent investigation to exclude vascular, intracranial, or hypertensive causes.",
       possible_conditions: [
-        "Acute Gastritis / Indigestion",
-        "Gastroesophageal Reflux",
-        "Abdominal Wall Strain / Intestinal Irritation",
-        "Mild Viral Gastroenteritis"
+        "Vascular / Tension Headache",
+        "Transient Ischemic Attack",
+        "Syncope Evaluation",
       ],
+      symptomLLMScore: 60,
     };
   }
   return {
     department: "General Physician",
     clinical_summary:
-      "Reported symptoms present without immediate single-system red flags. Consultation with a General Physician is assigned for comprehensive physical evaluation.",
+      "Reported symptoms present without immediate single-system emergency red flags. Consultation assigned for general physical evaluation.",
     possible_conditions: [
-      "Common Viral Illness / Systemic Fatigue",
-      "Stress & Tension Related Discomfort",
-      "General Primary Physical Checkup"
+      "Common Viral Illness",
+      "Stress & Tension Discomfort",
+      "Routine Physical Checkup",
     ],
+    symptomLLMScore: 15,
   };
 }
 
