@@ -23,7 +23,6 @@ import {
 } from '@/lib/vitalsEngine';
 import { createClient } from '@/utils/supabase/client';
 import { logTimelineEvent } from '@/lib/timelineLogger';
-import { GlobalHeader } from '@/components/GlobalHeader';
 
 export default function VitalsDashboardClient() {
   const router = useRouter();
@@ -178,8 +177,7 @@ export default function VitalsDashboardClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 relative flex flex-col items-center pb-12 overflow-y-auto">
-      <GlobalHeader />
+    <div className="min-h-screen bg-slate-50 relative p-4 sm:p-8 flex flex-col items-center overflow-y-auto">
       <div className="absolute top-10 left-1/4 w-96 h-96 bg-teal-200/30 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
 

@@ -58,67 +58,6 @@ html, body {
 .animate-float-3 { animation: floatSlow 4s ease-in-out infinite 0.5s; }
 .animate-float-4 { animation: floatFast 7s ease-in-out infinite 2s; }
 
-/* Water Ripple Animation Keyframes */
-@keyframes ripple-expand {
-  0% {
-    transform: scale(0);
-    opacity: 0.6;
-  }
-  100% {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
-.animate-ripple {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(16, 185, 129, 0.25);
-  pointer-events: none;
-  animation: ripple-expand 0.75s ease-out forwards;
-}
-
-/* High-Intensity Bright Neon Glow Classes */
-.neon-glow-cyan {
-  box-shadow: 0 0 20px 2px rgba(0, 243, 255, 0.6), inset 0 0 12px rgba(0, 243, 255, 0.25);
-  border: 1.5px solid #00f3ff !important;
-}
-.neon-glow-magenta {
-  box-shadow: 0 0 20px 2px rgba(255, 0, 127, 0.6), inset 0 0 12px rgba(255, 0, 127, 0.25);
-  border: 1.5px solid #ff007f !important;
-}
-.neon-glow-green {
-  box-shadow: 0 0 20px 2px rgba(0, 255, 102, 0.6), inset 0 0 12px rgba(0, 255, 102, 0.25);
-  border: 1.5px solid #00ff66 !important;
-}
-.neon-glow-purple {
-  box-shadow: 0 0 20px 2px rgba(176, 0, 255, 0.6), inset 0 0 12px rgba(176, 0, 255, 0.25);
-  border: 1.5px solid #b000ff !important;
-}
-
-/* White Fluid Surface Ripple Effect Keyframes */
-@keyframes fluid-wave {
-  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.8; }
-  50% { opacity: 0.4; }
-  100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
-}
-
-.white-fluid-ripple {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(226, 232, 240, 0.6) 50%, transparent 100%);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  pointer-events: none;
-  animation: fluid-wave 0.85s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-}
-
-/* Neon Glow Borders */
-.glow-teal { box-shadow: 0 0 15px -3px rgba(20, 184, 166, 0.35), inset 0 0 10px -5px rgba(20, 184, 166, 0.2); }
-.glow-cyan { box-shadow: 0 0 15px -3px rgba(6, 182, 212, 0.35), inset 0 0 10px -5px rgba(6, 182, 212, 0.2); }
-.glow-purple { box-shadow: 0 0 15px -3px rgba(168, 85, 247, 0.35), inset 0 0 10px -5px rgba(168, 85, 247, 0.2); }
-.glow-rose { box-shadow: 0 0 15px -3px rgba(244, 63, 94, 0.35), inset 0 0 10px -5px rgba(244, 63, 94, 0.2); }
-
-
 /* Letter Entrance Animation */
 @keyframes letterBounce {
   0% { opacity: 0; transform: translateY(-20px); }

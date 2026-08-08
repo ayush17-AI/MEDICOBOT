@@ -26,7 +26,6 @@ import { createClient } from '@/utils/supabase/client';
 import { RiskService } from '@/src/services/risk.service';
 import { FollowUpStatus } from '@/lib/validations/patientSchema';
 import { generatePatientSummaryPDF } from '@/lib/reportExporter';
-import { GlobalHeader } from '@/components/GlobalHeader';
 
 export type { FollowUpStatus };
 
@@ -520,9 +519,8 @@ export default function DoctorDashboardClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-12 overflow-y-auto">
-      <GlobalHeader />
-      <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-8">
+    <div className="min-h-screen bg-slate-100 p-4 sm:p-8 overflow-y-auto pb-12">
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -616,7 +614,7 @@ export default function DoctorDashboardClient() {
                 <option value="Pulmonology">Pulmonology</option>
               </select>
 
-              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL' || startDate || endDate) && (
+              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL') && (
                 <button
                   onClick={resetAllFilters}
                   className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -624,54 +622,6 @@ export default function DoctorDashboardClient() {
                   Reset
                 </button>
               )}
-            </div>
-          </div>
-
-          {/* Visible Module 2 Date Range Filter Panel */}
-          <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-2xl">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                📅 Date Range Filter
-              </span>
-              {/* Quick Presets */}
-              <div className="flex items-center gap-1">
-                {(['ALL', 'TODAY', 'WEEK', 'MONTH'] as const).map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => applyDatePreset(preset)}
-                    className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all cursor-pointer ${
-                      datePreset === preset 
-                        ? 'bg-emerald-600 text-white shadow-sm' 
-                        : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                    }`}
-                  >
-                    {preset === 'ALL' ? 'All' : preset === 'TODAY' ? 'Today' : preset === 'WEEK' ? '7D' : '30D'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">From:</label>
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={(e) => { setStartDate(e.target.value); setDatePreset('ALL'); }}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white font-medium focus:ring-1 focus:ring-emerald-500 focus:outline-none text-slate-800"
-                />
-              </div>
-              <span className="text-xs text-slate-400 font-bold">-</span>
-              <div className="flex items-center gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">To:</label>
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={(e) => { setEndDate(e.target.value); setDatePreset('ALL'); }}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white font-medium focus:ring-1 focus:ring-emerald-500 focus:outline-none text-slate-800"
-                />
-              </div>
             </div>
           </div>
 
