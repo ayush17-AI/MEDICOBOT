@@ -219,6 +219,34 @@ export default function DoctorDashboardClient() {
   const [selectedSeverity, setSelectedSeverity] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW'>('ALL');
   const [selectedFollowUp, setSelectedFollowUp] = useState<'ALL' | FollowUpStatus>('ALL');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
+
+  // Module 2 Date Range Filter State
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [datePreset, setDatePreset] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH'>('ALL');
+
+  const applyDatePreset = (preset: 'ALL' | 'TODAY' | 'WEEK' | 'MONTH') => {
+    setDatePreset(preset);
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    if (preset === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+    } else if (preset === 'TODAY') {
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    } else if (preset === 'WEEK') {
+      const pastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      setStartDate(pastWeek.toISOString().split('T')[0]);
+      setEndDate(todayStr);
+    } else if (preset === 'MONTH') {
+      const pastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      setStartDate(pastMonth.toISOString().split('T')[0]);
+      setEndDate(todayStr);
+    }
+  };
+
   const [aiVitalsSummary, setAiVitalsSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
@@ -369,6 +397,9 @@ export default function DoctorDashboardClient() {
     setSelectedSeverity('ALL');
     setSelectedFollowUp('ALL');
     setSelectedDepartment('ALL');
+    setStartDate('');
+    setEndDate('');
+    setDatePreset('ALL');
   };
 
   const filteredRecords = records.filter((rec) => {
@@ -391,6 +422,19 @@ export default function DoctorDashboardClient() {
 
     const recDept = rec.department || rec.kiosk_data?.triage?.department || 'General Practice';
     if (selectedDepartment !== 'ALL' && !recDept.toLowerCase().includes(selectedDepartment.toLowerCase())) return false;
+
+    // STEP 3: VERIFY COMPOUND DATE RANGE FILTER
+    const recDateRaw = rec.created_at || rec.kiosk_data?.date || new Date().toISOString();
+    const recMs = new Date(recDateRaw).getTime();
+
+    if (startDate) {
+      const startMs = new Date(startDate).setHours(0, 0, 0, 0);
+      if (recMs < startMs) return false;
+    }
+    if (endDate) {
+      const endMs = new Date(endDate).setHours(23, 59, 59, 999);
+      if (recMs > endMs) return false;
+    }
 
     const status = rec.kiosk_data?.vitals?.status || 'NORMAL';
     if (filterStatus === 'alert') return isAlertRecord(status) || isMildRecord(status);
@@ -570,7 +614,7 @@ export default function DoctorDashboardClient() {
                 <option value="Pulmonology">Pulmonology</option>
               </select>
 
-              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL') && (
+              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL' || startDate || endDate) && (
                 <button
                   onClick={resetAllFilters}
                   className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -578,6 +622,54 @@ export default function DoctorDashboardClient() {
                   Reset
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Visible Module 2 Date Range Filter Panel */}
+          <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-2xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                📅 Date Range Filter
+              </span>
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1">
+                {(['ALL', 'TODAY', 'WEEK', 'MONTH'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => applyDatePreset(preset)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all cursor-pointer ${
+                      datePreset === preset 
+                        ? 'bg-emerald-600 text-white shadow-sm' 
+                        : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                    }`}
+                  >
+                    {preset === 'ALL' ? 'All' : preset === 'TODAY' ? 'Today' : preset === 'WEEK' ? '7D' : '30D'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">From:</label>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => { setStartDate(e.target.value); setDatePreset('ALL'); }}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white font-medium focus:ring-1 focus:ring-emerald-500 focus:outline-none text-slate-800"
+                />
+              </div>
+              <span className="text-xs text-slate-400 font-bold">-</span>
+              <div className="flex items-center gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">To:</label>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => { setEndDate(e.target.value); setDatePreset('ALL'); }}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white font-medium focus:ring-1 focus:ring-emerald-500 focus:outline-none text-slate-800"
+                />
+              </div>
             </div>
           </div>
 
