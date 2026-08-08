@@ -451,6 +451,27 @@ export default function DoctorDashboardClient() {
   const isAnomaly = isAlertRecord(status);
   const isMild = isMildRecord(status);
 
+  // Force Direct Native SMS Protocol Dispatch
+  const handleTriggerDirectSms = (phone: string, patientName: string, riskScore: number) => {
+    const cleanNum = (phone || '').replace(/[^0-9]/g, '').slice(-10);
+    if (!cleanNum) return;
+
+    const msgText = encodeURIComponent(`CRITICAL MEDICAL ALERT: Patient ${patientName} is at HIGH RISK (Score: ${riskScore}/100). Immediate medical evaluation required.`);
+    
+    // Direct Universal Cellular URI Protocol
+    const smsUri = `sms:+91${cleanNum}?body=${msgText}`;
+    
+    // Trigger background server API
+    fetch('/api/v1/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: cleanNum, patientName, riskScore }),
+    }).catch(() => {});
+
+    // Open native mobile/desktop SMS App
+    window.location.href = smsUri;
+  };
+
   useEffect(() => {
     if (activeRec) {
       const pid = activeRec.id || activeRec.phone_number || activeRec.patient_name;
@@ -626,7 +647,7 @@ export default function DoctorDashboardClient() {
                 <option value="Pulmonology">Pulmonology</option>
               </select>
 
-              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL') && (
+              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL' || startDate || endDate) && (
                 <button
                   onClick={resetAllFilters}
                   className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -637,8 +658,55 @@ export default function DoctorDashboardClient() {
             </div>
           </div>
 
+          {/* Visible Module 2 Date Range Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/60">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                📅 Date Filter:
+              </span>
+              <div className="flex items-center gap-1">
+                {(['ALL', 'TODAY', 'WEEK', 'MONTH'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => applyDatePreset(preset)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                      datePreset === preset 
+                        ? 'bg-teal-600 text-white shadow-xs' 
+                        : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    {preset === 'ALL' ? 'All' : preset === 'TODAY' ? 'Today' : preset === 'WEEK' ? '7D' : '30D'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">From</span>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => { setStartDate(e.target.value); setDatePreset('ALL'); }}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white font-medium focus:ring-1 focus:ring-teal-500 focus:outline-none text-slate-800"
+                />
+              </div>
+              <span className="text-xs text-slate-400 font-bold">-</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">To</span>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => { setEndDate(e.target.value); setDatePreset('ALL'); }}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white font-medium focus:ring-1 focus:ring-teal-500 focus:outline-none text-slate-800"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Active Filter Chips Bar */}
-          {(selectedSeverity !== 'ALL' || selectedDepartment !== 'ALL' || selectedFollowUp !== 'ALL') && (
+          {(selectedSeverity !== 'ALL' || selectedDepartment !== 'ALL' || selectedFollowUp !== 'ALL' || startDate || endDate) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Filters:</span>
               
@@ -660,6 +728,20 @@ export default function DoctorDashboardClient() {
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   Status: {selectedFollowUp}
                   <button onClick={() => setSelectedFollowUp('ALL')} className="hover:text-emerald-900 font-bold ml-1 cursor-pointer">✖</button>
+                </span>
+              )}
+
+              {startDate && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                  From: {startDate}
+                  <button onClick={() => { setStartDate(''); setDatePreset('ALL'); }} className="hover:text-teal-900 font-bold ml-1 cursor-pointer">✖</button>
+                </span>
+              )}
+
+              {endDate && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                  To: {endDate}
+                  <button onClick={() => { setEndDate(''); setDatePreset('ALL'); }} className="hover:text-teal-900 font-bold ml-1 cursor-pointer">✖</button>
                 </span>
               )}
 
@@ -773,6 +855,14 @@ export default function DoctorDashboardClient() {
                   {activeRec.kiosk_data?.emergency || 'N/A'}
                 </span>
               </div>
+              {((activeRec.risk_score && activeRec.risk_score >= 70) || isAnomaly) && (
+                <button
+                  onClick={() => handleTriggerDirectSms(activeRec.phone_number, activeRec.patient_name, activeRec.risk_score || 85)}
+                  className="mt-2.5 w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <span>📱</span> Send Real Emergency SMS
+                </button>
+              )}
               {activeRec.kiosk_data?.date && (
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Appointment Date</span>
