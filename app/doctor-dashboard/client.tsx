@@ -1043,14 +1043,32 @@ export default function DoctorDashboardClient() {
                   if (activeRisk.riskScore >= 70) {
                     return (
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           const cleanNum = (activeRec.phone_number || '').replace(/[^0-9]/g, '').slice(-10);
-                          const msg = encodeURIComponent(`CRITICAL MEDICAL ALERT: Patient ${activeRec.patient_name} requires urgent care.`);
-                          window.open(`sms:+91${cleanNum}?body=${msg}`, '_self');
+                          const msg = `CRITICAL MEDICAL ALERT: Patient ${activeRec.patient_name} requires urgent care.`;
+                          try {
+                            const res = await fetch('/api/v1/sms/send', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ to: cleanNum, patientName: activeRec.patient_name, primarySymptom: msg }),
+                            });
+                            const data = await res.json();
+                            if (data.success && data.result?.return === true) {
+                              alert('✅ Emergency SMS dispatched successfully via Fast2SMS!');
+                            } else {
+                              const errTxt = data.error || data.result?.message || 'Fast2SMS Blocked';
+                              alert(`⚠️ Fast2SMS Failed: ${errTxt}\n\nLaunching Universal WhatsApp Web Fallback...`);
+                              const waUri = `https://wa.me/91${cleanNum}?text=${encodeURIComponent(msg)}`;
+                              window.open(waUri, '_blank');
+                            }
+                          } catch (err: any) {
+                            const waUri = `https://wa.me/91${cleanNum}?text=${encodeURIComponent(msg)}`;
+                            window.open(waUri, '_blank');
+                          }
                         }}
                         className="mt-2.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5 transition-all cursor-pointer w-full justify-center"
                       >
-                        <span>📱</span> Trigger Direct Emergency SMS
+                        <span>📱</span> Trigger Direct Emergency SMS (WhatsApp Fallback)
                       </button>
                     );
                   }

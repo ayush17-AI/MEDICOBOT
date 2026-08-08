@@ -85,6 +85,40 @@ export default function ConsultationClient() {
   const [dispatchStatus, setDispatchStatus] = useState<string | null>(null);
   const [isSendingSms, setIsSendingSms] = useState(false);
 
+  const handleTriggerEmergencySMS = async (phoneNumber: string, patientName: string, messageBody: string) => {
+    const cleanNum = (phoneNumber || '').replace(/[^0-9]/g, '').slice(-10);
+    if (!cleanNum) return alert('Invalid Phone Number');
+    
+    setIsSendingSms(true);
+
+    try {
+      const res = await fetch('/api/v1/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: cleanNum, patientName, primarySymptom: messageBody }),
+      });
+
+      const data = await res.json();
+      console.log('[SMS API RESPONSE]', data);
+
+      if (data.success && data.result?.return === true) {
+        alert('✅ SMS dispatched successfully via Fast2SMS!');
+      } else {
+        // Show exact error why Fast2SMS dropped it (e.g., DND, Low Balance, Invalid Key)
+        const errorMsg = data.error || data.result?.message || 'API Blocked';
+        alert(`⚠️ Fast2SMS Failed: ${errorMsg}\n\nExecuting Fallback...`);
+        
+        // UNIVERSAL DESKTOP FALLBACK: WhatsApp Web instead of local sms: protocol
+        const waUri = `https://wa.me/91${cleanNum}?text=${encodeURIComponent(messageBody)}`;
+        window.open(waUri, '_blank');
+      }
+    } catch (err: any) {
+      alert(`❌ Critical Backend Error: ${err.message}`);
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
   const handleSendConfirmationSMS = async (phoneNumber: string, patientName: string, doctorName: string, tokenNo: string, room: string) => {
     const cleanPhone = (phoneNumber || '9461112639').replace(/[^0-9]/g, '').slice(-10);
     if (!cleanPhone) return;
