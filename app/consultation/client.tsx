@@ -102,7 +102,7 @@ export default function ConsultationClient() {
     }
   }, []);
 
-  // STEP 3: Automatic High-Risk Emergency Alert Dispatch
+  // STEP 3: Automatic High-Risk Emergency Alert Dispatch (WhatsApp + Fast2SMS)
   useEffect(() => {
     if (riskEvaluation && patient) {
       const score = Number(riskEvaluation.riskScore || 0);
@@ -115,11 +115,27 @@ export default function ConsultationClient() {
           primarySymptom: symptoms || 'Acute Symptoms',
           vitalsSummary: vitals ? `Temp ${vitals.temperature || '98.6'}°F, HR ${vitals.heart_rate || vitals.heartRate || '72'} BPM, SpO2 ${vitals.spo2 || '98'}%` : 'Requires Immediate Evaluation',
         });
+
+        // Fast2SMS Real Direct SMS Dispatch
+        fetch('/api/v1/sms/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: emContact,
+            patientName: patient.name || 'Patient',
+            riskScore: score,
+            primarySymptom: symptoms || 'reported symptoms',
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => console.log('[FAST2SMS SYSTEM RESULT]', data))
+          .catch((err) => console.error('[FAST2SMS DISPATCH ERR]', err));
+
         const pid = patient.id || patient.phone || patient.name || 'anonymous_patient';
         logTimelineEvent({
           patientId: pid,
           eventType: 'ALERT_DISPATCHED',
-          summary: `High Risk Alert Dispatched (Score: ${score}/100) to ${emContact}`,
+          summary: `High Risk Emergency SMS/WhatsApp Alert Dispatched (Score: ${score}/100) to ${emContact}`,
           details: { riskScore: score, emergencyContact: emContact },
           severity: 'CRITICAL',
         });
