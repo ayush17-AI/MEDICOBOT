@@ -26,6 +26,7 @@ import { createClient } from '@/utils/supabase/client';
 import { RiskService } from '@/src/services/risk.service';
 import { FollowUpStatus } from '@/lib/validations/patientSchema';
 import { generatePatientSummaryPDF } from '@/lib/reportExporter';
+import { GlobalHeader } from '@/components/GlobalHeader';
 
 export type { FollowUpStatus };
 
@@ -519,8 +520,9 @@ export default function DoctorDashboardClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 sm:p-8 overflow-y-auto pb-12">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-100 pb-12 overflow-y-auto">
+      <GlobalHeader />
+      <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-8">
         {/* Header */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">

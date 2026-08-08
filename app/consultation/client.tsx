@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber, checkAndTriggerEmergencyAlert, sendRealWhatsAppNotification } from '@/lib/whatsappHelper';
+import { DoctorCard } from '@/components/DoctorCard';
+import { GlobalHeader } from '@/components/GlobalHeader';
 import { RiskService } from '@/src/services/risk.service';
 import { logTimelineEvent } from '@/lib/timelineLogger';
 
@@ -245,7 +247,9 @@ export default function ConsultationClient() {
   ) || DOCTORS_DATABASE[0];
 
   return (
-    <div className="min-h-screen bg-slate-50 relative p-4 sm:p-8 flex flex-col items-center overflow-y-auto">
+    <div className="min-h-screen bg-slate-50 relative flex flex-col items-center overflow-y-auto pb-12">
+      <GlobalHeader />
+
       {/* Background Glows */}
       <div className="absolute top-10 left-10 w-96 h-96 bg-teal-200/30 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
@@ -572,48 +576,12 @@ export default function ConsultationClient() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {DOCTORS_DATABASE.map((doc) => (
-                    <div
+                    <DoctorCard
                       key={doc.id}
-                      className="bg-white border border-slate-200 hover:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3 flex flex-col justify-between transition-all"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <span className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center text-2xl">
-                            {doc.image}
-                          </span>
-                          <div>
-                            <h4 className="font-black text-slate-900 text-base">{doc.name}</h4>
-                            <p className="text-xs font-semibold text-slate-500">{doc.department}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 flex-wrap text-xs font-semibold text-slate-600 pt-1">
-                          <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 flex items-center gap-1">
-                            <Star size={12} className="text-amber-500 fill-amber-500" />
-                            {doc.rating}
-                          </span>
-                          <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 flex items-center gap-1">
-                            <Award size={12} className="text-teal-600" />
-                            {doc.experience}
-                          </span>
-                        </div>
-
-                        <div className="text-xs font-bold text-emerald-700 flex items-center gap-1 pt-0.5">
-                          <CheckCircle2 size={13} />
-                          <span>{doc.availability}</span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => handleBookToken(doc)}
-                        disabled={isBooking}
-                        data-testid={`book-token-btn-${doc.id}`}
-                        className="w-full mt-2 py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <Calendar size={14} />
-                        <span>Book &amp; Generate Token</span>
-                      </button>
-                    </div>
+                      doctor={doc}
+                      onSelect={() => handleBookToken(doc)}
+                      isSelected={selectedDoctor?.id === doc.id}
+                    />
                   ))}
                 </div>
               </div>
