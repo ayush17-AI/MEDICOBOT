@@ -23,8 +23,10 @@ import {
 import Link from "next/link";
 import GoogleAuthGate from "@/components/GoogleAuthGate";
 import UserHeader from "@/components/UserHeader";
+import MedicobotAnimatedTitle from "@/components/MedicobotAnimatedTitle";
 import FloatingMedicalIcons from "@/components/FloatingMedicalIcons";
 import FloatingMedicalBackground from "@/components/FloatingMedicalBackground";
+import { MedicobotParticleTransition } from "@/components/MedicobotParticleTransition";
 import { createClient } from "@/utils/supabase/client";
 import { patientInfoSchema } from "@/lib/validations/patientSchema";
 import {
@@ -2234,7 +2236,7 @@ export default function Page() {
 
         {/* PHASE 1: LOGO */}
         {phase === "logo" && (
-          <LogoStage key={`logo-${logoKey}`} onDone={() => setPhase("language")} />
+          <MedicobotParticleTransition key={`logo-${logoKey}`} onComplete={() => setPhase("language")} />
         )}
 
         {/* PHASE 2: LANGUAGE */}

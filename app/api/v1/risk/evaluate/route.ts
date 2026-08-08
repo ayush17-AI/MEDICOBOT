@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { RiskService } from '@/src/services/risk.service';
 import { triageQueueStore } from '@/src/store/triage.store';
 import type { TriageQueueItem, VitalsInput } from '@/src/models/risk.model';
+import { attachDisclaimerToPayload } from '@/src/compliance/disclaimer/triageDisclaimer';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,7 +153,7 @@ Return ONLY a valid JSON object matching this exact schema:
     triageQueueStore.upsert(queueItem);
 
     return NextResponse.json(
-      {
+      attachDisclaimerToPayload({
         success: true,
         patientId,
         riskScore: finalScore,
@@ -163,7 +164,7 @@ Return ONLY a valid JSON object matching this exact schema:
         factors: parsedFactors,
         riskFactors: resultFactors,
         evaluatedAt: nowIso,
-      },
+      }),
       { status: 200 }
     );
   } catch (err: any) {

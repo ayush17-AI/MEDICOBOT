@@ -26,6 +26,8 @@ import { createClient } from '@/utils/supabase/client';
 import { RiskService } from '@/src/services/risk.service';
 import { FollowUpStatus } from '@/lib/validations/patientSchema';
 import { generatePatientSummaryPDF } from '@/lib/reportExporter';
+import { TRIAGE_LEGAL_DISCLAIMER } from '@/src/compliance/disclaimer/triageDisclaimer';
+import { sendWhatsAppClinicalGuidance } from '@/src/services/whatsapp/whatsappService';
 
 export type { FollowUpStatus };
 
@@ -495,6 +497,16 @@ export default function DoctorDashboardClient() {
           })
           .eq('id', activeRec.id);
       }
+
+      // Step 3: Background non-blocking WhatsApp guidance dispatch
+      sendWhatsAppClinicalGuidance({
+        patientName: activeRec.patient_name,
+        phoneNumber: activeRec.phone_number,
+        followUpStatus: statusVal,
+        clinicianNote: noteVal,
+        department: activeRec.department || activeRec.kiosk_data?.triage?.department,
+        recheckupDate: activeRec.kiosk_data?.date || 'As advised',
+      }).catch((wErr) => console.warn('[WHATSAPP GUIDANCE DISPATCH WARN]', wErr));
     } catch (err) {
       console.warn('Supabase follow-up persistence notice:', err);
     }
@@ -624,6 +636,41 @@ export default function DoctorDashboardClient() {
               )}
             </div>
           </div>
+
+          {/* Active Filter Chips Bar */}
+          {(selectedSeverity !== 'ALL' || selectedDepartment !== 'ALL' || selectedFollowUp !== 'ALL') && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Filters:</span>
+              
+              {selectedSeverity !== 'ALL' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                  Severity: {selectedSeverity}
+                  <button onClick={() => setSelectedSeverity('ALL')} className="hover:text-amber-900 font-bold ml-1 cursor-pointer">✖</button>
+                </span>
+              )}
+
+              {selectedDepartment !== 'ALL' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  Dept: {selectedDepartment}
+                  <button onClick={() => setSelectedDepartment('ALL')} className="hover:text-blue-900 font-bold ml-1 cursor-pointer">✖</button>
+                </span>
+              )}
+
+              {selectedFollowUp !== 'ALL' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Status: {selectedFollowUp}
+                  <button onClick={() => setSelectedFollowUp('ALL')} className="hover:text-emerald-900 font-bold ml-1 cursor-pointer">✖</button>
+                </span>
+              )}
+
+              <button 
+                onClick={resetAllFilters}
+                className="text-[11px] text-slate-500 hover:text-slate-800 underline font-medium ml-auto cursor-pointer"
+              >
+                Clear All
+              </button>
+            </div>
+          )}
 
           {/* Horizontal Scroll Queue Pills */}
           {filteredRecords.length > 0 ? (
@@ -892,6 +939,10 @@ export default function DoctorDashboardClient() {
                   );
                 })()}
               </div>
+
+              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed italic border-t border-slate-100 pt-1.5">
+                {TRIAGE_LEGAL_DISCLAIMER}
+              </p>
             </div>
           </div>
         </div>

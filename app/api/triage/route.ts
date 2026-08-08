@@ -167,6 +167,8 @@ function offlineMock(body: TriageRequestBody & { prompt?: string }): Omit<Triage
   };
 }
 
+import { attachDisclaimerToPayload } from "@/src/compliance/disclaimer/triageDisclaimer";
+
 export async function POST(req: NextRequest) {
   let body: TriageRequestBody & { prompt?: string };
   try {
@@ -190,12 +192,14 @@ export async function POST(req: NextRequest) {
   for (const provider of providers) {
     try {
       const result = await provider.run();
-      return NextResponse.json({ ...result, provider: provider.name } satisfies TriageResult);
+      const payload = attachDisclaimerToPayload({ ...result, provider: provider.name });
+      return NextResponse.json(payload satisfies TriageResult & { meta: any });
     } catch (err) {
       console.error(`[triage] ${provider.name} failed:`, err instanceof Error ? err.message : err);
     }
   }
 
   const mock = offlineMock(body);
-  return NextResponse.json({ ...mock, provider: "offline-mock" } satisfies TriageResult);
+  const payload = attachDisclaimerToPayload({ ...mock, provider: "offline-mock" });
+  return NextResponse.json(payload satisfies TriageResult & { meta: any });
 }

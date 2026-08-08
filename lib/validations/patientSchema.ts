@@ -44,6 +44,9 @@ export const patientSchema = z
       .string()
       .min(1, { message: 'Emergency Contact Number is required before proceeding.' }),
     appointmentDate: z.string().optional(),
+    whatsapp_sent_at: z.string().optional(),
+    delivery_status: z.enum(['SENT', 'PENDING', 'FAILED']).optional(),
+    scheduled_recheckup_date: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // Validate Primary Phone
