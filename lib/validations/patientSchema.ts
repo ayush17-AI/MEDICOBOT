@@ -40,7 +40,9 @@ export const patientSchema = z
     countryCode: z.string().default('+91'),
     phoneNumber: z.string().min(1, { message: 'Phone number is required' }),
     emergencyCountryCode: z.string().default('+91'),
-    emergencyContact: z.string().optional(),
+    emergencyContact: z
+      .string()
+      .min(1, { message: 'Emergency Contact Number is required before proceeding.' }),
     appointmentDate: z.string().optional(),
   })
   .superRefine((data, ctx) => {
@@ -63,29 +65,33 @@ export const patientSchema = z
       });
     }
 
-    // Validate Emergency Contact Phone if provided
-    if (data.emergencyContact && data.emergencyContact.trim().length > 0) {
-      const emConfig =
-        COUNTRY_PHONE_CONFIG[data.emergencyCountryCode] ||
-        COUNTRY_PHONE_CONFIG['+91'];
-      const cleanEmPhone = cleanPhoneNumber(
-        data.emergencyContact,
-        data.emergencyCountryCode
-      );
+    // Validate Mandatory Emergency Contact Phone
+    const emConfig =
+      COUNTRY_PHONE_CONFIG[data.emergencyCountryCode] ||
+      COUNTRY_PHONE_CONFIG['+91'];
+    const cleanEmPhone = cleanPhoneNumber(
+      data.emergencyContact || '',
+      data.emergencyCountryCode
+    );
 
-      if (cleanEmPhone.length !== emConfig.digits) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['emergencyContact'],
-          message: `Emergency contact requires ${emConfig.digits} digits for ${emConfig.name} (${data.emergencyCountryCode})`,
-        });
-      } else if (!emConfig.pattern.test(cleanEmPhone)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['emergencyContact'],
-          message: `Invalid emergency phone format for ${emConfig.name} (${data.emergencyCountryCode})`,
-        });
-      }
+    if (!cleanEmPhone || cleanEmPhone.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emergencyContact'],
+        message: 'Emergency Contact Number is required before proceeding.',
+      });
+    } else if (cleanEmPhone.length !== emConfig.digits) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emergencyContact'],
+        message: `Emergency contact requires ${emConfig.digits} digits for ${emConfig.name} (${data.emergencyCountryCode})`,
+      });
+    } else if (!emConfig.pattern.test(cleanEmPhone)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emergencyContact'],
+        message: `Invalid emergency phone format for ${emConfig.name} (${data.emergencyCountryCode})`,
+      });
     }
   });
 

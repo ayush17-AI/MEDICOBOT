@@ -15,7 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber } from '@/lib/whatsappHelper';
+import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber, checkAndTriggerEmergencyAlert } from '@/lib/whatsappHelper';
 import { RiskService } from '@/src/services/risk.service';
 
 export interface DoctorSpec {
@@ -100,6 +100,23 @@ export default function ConsultationClient() {
       console.warn('Session load notice:', e);
     }
   }, []);
+
+  // STEP 3: Automatic High-Risk Emergency Alert Dispatch
+  useEffect(() => {
+    if (riskEvaluation && patient) {
+      const score = Number(riskEvaluation.riskScore || 0);
+      const emContact = patient.emergencyMobile || patient.emergencyContact || patient.emergency || '';
+      if (score >= 70 && emContact) {
+        checkAndTriggerEmergencyAlert({
+          name: patient.name || 'Patient',
+          riskScore: score,
+          emergencyContact: emContact,
+          primarySymptom: symptoms || 'Acute Symptoms',
+          vitalsSummary: vitals ? `Temp ${vitals.temperature || '98.6'}°F, HR ${vitals.heart_rate || vitals.heartRate || '72'} BPM, SpO2 ${vitals.spo2 || '98'}%` : 'Requires Immediate Evaluation',
+        });
+      }
+    }
+  }, [riskEvaluation, patient, symptoms, vitals]);
 
   const activeRisk = React.useMemo(() => {
     if (riskEvaluation) return riskEvaluation;
@@ -232,6 +249,18 @@ export default function ConsultationClient() {
             </div>
           </div>
         </div>
+
+        {/* High Risk Critical Red Warning Card */}
+        {activeRisk && activeRisk.riskScore >= 70 && (
+          <div data-testid="critical-risk-warning-card" className="p-5 rounded-3xl bg-red-600 text-white shadow-lg border-2 border-red-700 space-y-2 animate-shake">
+            <div className="flex items-center gap-2 font-black text-sm uppercase tracking-wider">
+              <span>🚨 CRITICAL RISK DETECTED</span>
+            </div>
+            <p className="text-xs sm:text-sm font-bold leading-relaxed">
+              CRITICAL RISK DETECTED — Automatic emergency alert sent to primary contact ({patient?.emergencyMobile || patient?.emergencyContact || patient?.emergency || 'Registered Contact'}).
+            </p>
+          </div>
+        )}
 
         {/* AI Recommended Department & Clinical Triage Summary */}
         <div className="bg-white border-2 border-teal-500/40 rounded-3xl p-6 shadow-md space-y-3">

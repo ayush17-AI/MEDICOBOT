@@ -270,7 +270,7 @@ export default function PatientInfoClient() {
           {/* Emergency Contact Number with Country Code Dropdown */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Emergency Contact Number <span className="text-slate-400 font-normal">(Optional)</span>
+              Emergency Contact Number <span className="text-red-500 font-black">*</span>
             </label>
             <div className="flex items-center gap-2">
               <select
@@ -319,7 +319,7 @@ export default function PatientInfoClient() {
               </p>
             ) : (
               <p className="mt-1 text-[11px] font-medium text-slate-500">
-                Optional emergency contact ({currentEmCountryConfig.digits} digits for {selectedEmCountryCode})
+                Mandatory emergency contact ({currentEmCountryConfig.digits} digits for {selectedEmCountryCode})
               </p>
             )}
           </div>

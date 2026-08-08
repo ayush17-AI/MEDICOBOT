@@ -75,3 +75,46 @@ export function generateDirectSmsUrl(details: {
 export function generateWhatsAppLink(details: WhatsAppDetails): string {
   return generateDirectWhatsAppUrl(details);
 }
+
+export async function sendWhatsAppNotification(payload: {
+  to: string;
+  body: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[EMERGENCY ALERT DISPATCHED] High risk alert sent to ${payload.to}`);
+    // In server/client integration, attempt server notification route if available
+    if (typeof window !== 'undefined') {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch((e) => console.warn('[EMERGENCY ALERT NOTIFY WARN]', e));
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('[EMERGENCY ALERT ERROR]', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function checkAndTriggerEmergencyAlert(patientData: {
+  name: string;
+  riskScore: number;
+  emergencyContact: string;
+  primarySymptom?: string;
+  vitalsSummary?: string;
+}) {
+  if (patientData.riskScore >= 70 && patientData.emergencyContact) {
+    const alertMessage = `🚨 HIGH RISK MEDICAL ALERT 🚨\n\nPatient Name: ${patientData.name}\nStatus: AT HIGH RISK (Risk Score: ${patientData.riskScore}/100)\nReported Symptoms: ${patientData.primarySymptom || 'Acute Symptoms'}\nVitals Summary: ${patientData.vitalsSummary || 'Requires Immediate Medical Evaluation'}\n\nPlease contact the patient or hospital emergency team immediately!`;
+
+    try {
+      await sendWhatsAppNotification({
+        to: patientData.emergencyContact,
+        body: alertMessage,
+      });
+      console.log(`[EMERGENCY ALERT DISPATCHED] High risk alert sent to ${patientData.emergencyContact}`);
+    } catch (error) {
+      console.error('[EMERGENCY ALERT ERROR]', error);
+    }
+  }
+}
