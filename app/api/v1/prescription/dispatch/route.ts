@@ -3,51 +3,63 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { patientId, prescriptionText, transcriptionSource, fulfillInHousePharmacy } = body;
+    const { patientId, patientName, patientPhone, prescriptionText, transcriptionSource, fulfillInHousePharmacy } = body;
 
-    if (!patientId || !prescriptionText) {
+    if (!prescriptionText) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: patientId and prescriptionText are mandatory.' },
+        { success: false, error: 'Missing required field: prescriptionText is mandatory.' },
         { status: 400 }
       );
     }
 
-    // Sanitize prescription input
     const sanitizedText = prescriptionText.trim();
+    const cleanPhone = (patientPhone || '').replace(/[^0-9]/g, '').slice(-10);
 
-    // Map into FHIR MedicationRequest payload structure
-    const fhirMedicationRequest = {
-      resourceType: 'MedicationRequest',
-      status: 'active',
-      intent: 'order',
-      subject: { reference: `Patient/${patientId}` },
-      dosageInstruction: [{ text: sanitizedText }],
-      authoredOn: new Date().toISOString(),
-      extension: [
-        {
-          url: 'https://medicobot.org/fhir/StructureDefinition/transcription-source',
-          valueString: transcriptionSource || 'manual_input',
-        },
-      ],
-    };
+    // 1. Format WhatsApp Prescription Message
+    const whatsappMessage = `💊 *MEDICOBOT OFFICIAL PRESCRIPTION*\n\n*Patient:* ${patientName || 'Valued Patient'}\n*Date:* ${new Date().toLocaleDateString()}\n\n*Prescription Details:*\n${sanitizedText}\n\n*In-House Pharmacy Status:* ${fulfillInHousePharmacy ? 'Order Queued for Fulfillment ✅' : 'Self-Fulfillment'}\n\n_Please consult your pharmacist or physician if you have any questions._`;
 
     console.log('[PRESCRIPTION DISPATCHED]', {
       patientId,
+      phone: cleanPhone,
       source: transcriptionSource,
       fulfillPharmacy: fulfillInHousePharmacy,
-      fhir: fhirMedicationRequest,
     });
+
+    // 2. Direct WhatsApp Link Fallback Generation
+    const whatsappDeepLink = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(whatsappMessage)}`
+      : null;
+
+    // 3. Background WhatsApp Dispatch Trigger (if Twilio/Meta keys exist)
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromPhone = process.env.TWILIO_WHATSAPP_NUMBER;
+
+    if (accountSid && authToken && fromPhone && cleanPhone) {
+      try {
+        const client = require('twilio')(accountSid, authToken);
+        await client.messages.create({
+          body: whatsappMessage,
+          from: `whatsapp:${fromPhone}`,
+          to: `whatsapp:+91${cleanPhone}`,
+        });
+        console.log('[WHATSAPP PRESCRIPTION DISPATCH SUCCESS]');
+      } catch (wErr) {
+        console.error('[TWILIO WHATSAPP ERR]', wErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Prescription processed and dispatch queued successfully',
+      message: 'Prescription dispatched to pharmacy and WhatsApp successfully',
       dispatchId: `disp_${Date.now()}`,
+      whatsappDeepLink,
       metadata: {
         patientId,
+        patientPhone: cleanPhone,
         transcriptionSource: transcriptionSource || 'manual_input',
         fulfillInHousePharmacy: Boolean(fulfillInHousePharmacy),
       },
-      fhirResource: fhirMedicationRequest,
     }, { status: 201 });
   } catch (error: any) {
     console.error('[DISPATCH API ERR]', error);

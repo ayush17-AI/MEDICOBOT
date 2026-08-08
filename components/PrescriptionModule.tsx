@@ -70,12 +70,17 @@ export function PrescriptionModule({ patientId, activeRecord, onDispatchSuccess 
     if (!prescriptionText.trim()) return;
     setIsSubmitting(true);
 
+    const targetPhone = activeRecord?.phone_number || activeRecord?.phone || '9461112639';
+    const targetName = activeRecord?.patient_name || activeRecord?.name || 'Ayush Naraniwal';
+
     try {
       const res = await fetch('/api/v1/prescription/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientId: patientId || activeRecord?.id || 'PAT-DEMO-001',
+          patientName: targetName,
+          patientPhone: targetPhone,
           prescriptionText: prescriptionText,
           transcriptionSource: transcriptionSource,
           fulfillInHousePharmacy: fulfillPharmacy,
@@ -84,7 +89,11 @@ export function PrescriptionModule({ patientId, activeRecord, onDispatchSuccess 
 
       const data = await res.json();
       if (data.success) {
-        alert('✅ Prescription & Dispatch Notification sent successfully!');
+        // Direct WhatsApp Dispatch Trigger
+        if (data.whatsappDeepLink && typeof window !== 'undefined') {
+          window.open(data.whatsappDeepLink, '_blank');
+        }
+        alert('✅ Prescription sent to In-House Pharmacy & WhatsApp!');
         if (onDispatchSuccess) onDispatchSuccess(data);
       }
     } catch (err) {

@@ -494,6 +494,22 @@ export default function DoctorDashboardClient() {
     }
   };
 
+  const handleTriggerRealSMS = async (phoneNumber: string, patientName: string) => {
+    const cleanNum = (phoneNumber || '').replace(/[^0-9]/g, '').slice(-10);
+    const msgText = `MEDICOBOT ALERT: Hello ${patientName}, your medical update/appointment is confirmed.`;
+
+    fetch('/api/v1/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: cleanNum, patientName, primarySymptom: msgText }),
+    }).catch((err) => console.error('SMS API call err:', err));
+
+    const nativeSmsUri = `sms:+91${cleanNum}?body=${encodeURIComponent(msgText)}`;
+    if (typeof window !== 'undefined') {
+      window.location.href = nativeSmsUri;
+    }
+  };
+
   useEffect(() => {
     if (activeRec) {
       const pid = activeRec.id || activeRec.phone_number || activeRec.patient_name;
