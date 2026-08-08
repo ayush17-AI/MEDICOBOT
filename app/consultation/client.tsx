@@ -17,6 +17,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { generateDirectWhatsAppUrl, generateDirectSmsUrl, sanitizeIndianPhone, sanitizePhoneNumber, checkAndTriggerEmergencyAlert, sendRealWhatsAppNotification } from '@/lib/whatsappHelper';
 import { RiskService } from '@/src/services/risk.service';
+import { logTimelineEvent } from '@/lib/timelineLogger';
 
 export interface DoctorSpec {
   id: string;
@@ -113,6 +114,14 @@ export default function ConsultationClient() {
           emergencyContact: emContact,
           primarySymptom: symptoms || 'Acute Symptoms',
           vitalsSummary: vitals ? `Temp ${vitals.temperature || '98.6'}°F, HR ${vitals.heart_rate || vitals.heartRate || '72'} BPM, SpO2 ${vitals.spo2 || '98'}%` : 'Requires Immediate Evaluation',
+        });
+        const pid = patient.id || patient.phone || patient.name || 'anonymous_patient';
+        logTimelineEvent({
+          patientId: pid,
+          eventType: 'ALERT_DISPATCHED',
+          summary: `High Risk Alert Dispatched (Score: ${score}/100) to ${emContact}`,
+          details: { riskScore: score, emergencyContact: emContact },
+          severity: 'CRITICAL',
         });
       }
     }

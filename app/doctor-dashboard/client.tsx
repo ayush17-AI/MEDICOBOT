@@ -191,11 +191,26 @@ export default function DoctorDashboardClient() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'alert' | 'normal'>('all');
   const [aiVitalsSummary, setAiVitalsSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
 
   // Digital Prescription & Pharmacy Dispatch State
   const [rxText, setRxText] = useState('');
   const [pharmacyConsent, setPharmacyConsent] = useState(true);
   const [dispatchNotice, setDispatchNotice] = useState<string | null>(null);
+
+  const fetchTimelineEvents = useCallback(async (pid: string) => {
+    try {
+      const res = await fetch(`/api/v1/timeline/${encodeURIComponent(pid)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.events)) {
+          setTimelineEvents(json.events);
+        }
+      }
+    } catch (e) {
+      console.warn('Timeline API fetch notice:', e);
+    }
+  }, []);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -295,6 +310,9 @@ export default function DoctorDashboardClient() {
 
   useEffect(() => {
     fetchRecords();
+  }, [fetchRecords]);
+
+  useEffect(() => {
     fetchAiVitalsSummary();
 
     const supabase = createClient();
@@ -332,6 +350,13 @@ export default function DoctorDashboardClient() {
   const status = vitals?.status || 'NORMAL';
   const isAnomaly = isAlertRecord(status);
   const isMild = isMildRecord(status);
+
+  useEffect(() => {
+    if (activeRec) {
+      const pid = activeRec.id || activeRec.phone_number || activeRec.patient_name;
+      fetchTimelineEvents(pid);
+    }
+  }, [activeRec, fetchTimelineEvents]);
 
   // STEP 3: DISPATCH LOGIC HANDLER
   const handleSendPrescription = () => {
@@ -645,8 +670,32 @@ export default function DoctorDashboardClient() {
           {/* 2. Daily Timeline Logs Feed */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-              Daily Visit &amp; Vitals Timeline
+              Daily Visit &amp; Immutable Audit Trail Timeline ({timelineEvents.length} Recorded Events)
             </h4>
+
+            {/* Dynamic Store Events */}
+            {timelineEvents.map((evt) => (
+              <div key={evt.id} className="p-3.5 bg-teal-50/50 rounded-xl border border-teal-200/80 flex items-start justify-between text-xs">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-slate-800">
+                      {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(evt.timestamp).toLocaleDateString()}
+                    </span>
+                    <span className={`font-semibold text-[10px] px-2 py-0.5 rounded-full ${
+                      evt.severity === 'CRITICAL' ? 'bg-red-600 text-white' :
+                      evt.severity === 'HIGH' ? 'bg-amber-100 text-amber-800' :
+                      'bg-teal-100 text-teal-800'
+                    }`}>
+                      {evt.eventType}
+                    </span>
+                  </div>
+                  <p className="text-slate-700 font-medium">
+                    {evt.summary}
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded">Store Log</span>
+              </div>
+            ))}
 
             {/* Log Entry Item */}
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-start justify-between text-xs">

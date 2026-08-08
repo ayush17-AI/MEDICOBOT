@@ -22,6 +22,7 @@ import {
   VitalsStatus,
 } from '@/lib/vitalsEngine';
 import { createClient } from '@/utils/supabase/client';
+import { logTimelineEvent } from '@/lib/timelineLogger';
 
 export default function VitalsDashboardClient() {
   const router = useRouter();
@@ -107,6 +108,15 @@ export default function VitalsDashboardClient() {
         evaluated_at: new Date().toISOString(),
       };
       sessionStorage.setItem('medicobot_vitals', JSON.stringify(vitalsData));
+
+      const pid = patient?.phone || patient?.name || 'anonymous_patient';
+      logTimelineEvent({
+        patientId: pid,
+        eventType: 'VITALS_SUBMITTED',
+        summary: `Vitals Checked: ${vitals.temperature}°F, ${vitals.heartRate} BPM, SpO2 ${vitals.spo2}%, BP ${vitals.sysBP}/${vitals.diaBP}`,
+        details: vitalsData,
+        severity: evalResult.overallStatus === 'SEVERE' ? 'HIGH' : evalResult.overallStatus === 'INVALID' ? 'CRITICAL' : 'LOW',
+      });
 
       if (user && patient) {
         await supabase.from('patient_records').insert([

@@ -46,11 +46,21 @@ export async function GET(req: NextRequest) {
 
 // NOTE: mirrors the DiagnosticReport route — add createCarePlan() to
 // fhir/data/repository.ts to enable persistence for this endpoint.
+import { timelineStore } from "@/src/store/timeline.store";
+
 export const POST = withFhirValidation(
   "CarePlan",
   async (req: NextRequest, body: FhirCarePlan) => {
     try {
       const internalInput = fromFhirCarePlan(body);
+      const patientId = internalInput.patientId || "unknown_patient";
+      timelineStore.addEvent({
+        patientId,
+        eventType: "DOSING_EVENT",
+        summary: `FHIR CarePlan Created: ${internalInput.title || "Clinical Dosing & Care Plan"}`,
+        details: { fhirBody: body },
+        severity: "LOW",
+      });
       return NextResponse.json(
         serverError(
           "createCarePlan is not implemented in fhir/data/repository.ts yet — add it to enable this endpoint."

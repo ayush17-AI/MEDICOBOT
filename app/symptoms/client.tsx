@@ -14,6 +14,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { useSpeechRecognition, cleanTranscript } from '@/lib/useSpeechRecognition';
 import { RiskService } from '@/src/services/risk.service';
+import { logTimelineEvent } from '@/lib/timelineLogger';
 
 function parseSystolicBP(val: any): number | undefined {
   if (typeof val === 'number' && Number.isFinite(val)) return val;
@@ -142,6 +143,16 @@ export default function SymptomsClient() {
       sessionStorage.setItem('medicobot_symptoms', symptoms.trim());
       sessionStorage.setItem('medicobot_triage', JSON.stringify(triage));
       sessionStorage.setItem('medicobot_risk_evaluation', JSON.stringify(riskResult));
+
+      // Log timeline event for symptom detection & risk evaluation
+      const pid = patient?.id || patient?.phone || patient?.name || 'anonymous_patient';
+      logTimelineEvent({
+        patientId: pid,
+        eventType: 'SYMPTOM_DETECTED',
+        summary: `Symptom Analysis: ${symptoms.trim().substring(0, 60)}...`,
+        details: { symptoms: symptoms.trim(), triage, riskScore: riskResult?.riskScore },
+        severity: riskResult?.riskScore >= 76 ? 'CRITICAL' : riskResult?.riskScore >= 51 ? 'HIGH' : 'LOW',
+      });
 
       // Save Vitals + Symptoms + Risk Evaluation to Supabase patient_records
       const supabase = createClient();
