@@ -28,6 +28,7 @@ import { FollowUpStatus } from '@/lib/validations/patientSchema';
 import { generatePatientSummaryPDF } from '@/lib/reportExporter';
 import { TRIAGE_LEGAL_DISCLAIMER } from '@/src/compliance/disclaimer/triageDisclaimer';
 import { sendWhatsAppClinicalGuidance } from '@/src/services/whatsapp/whatsappService';
+import { PrescriptionModule } from '@/components/PrescriptionModule';
 
 export type { FollowUpStatus };
 
@@ -1164,53 +1165,7 @@ export default function DoctorDashboardClient() {
         </div>
 
         {/* STEP 3: DIGITAL PRESCRIPTION & PHARMACY DISPATCH MODULE (Positioned Below 3-Column Grid) */}
-        <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <Pill size={18} className="text-teal-600" />
-            <span>Digital Prescription &amp; Pharmacy Dispatch Module</span>
-          </h3>
-
-          {dispatchNotice && (
-            <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-fadeIn">
-              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-              <span>{dispatchNotice}</span>
-            </div>
-          )}
-
-          {/* Prescription Text Input */}
-          <textarea
-            value={rxText}
-            onChange={(e) => setRxText(e.target.value)}
-            placeholder="Enter prescribed medications, dosage, and duration (e.g., Tab Paracetamol 650mg BD x 3 days, Syrup Antacid 10ml HS)..."
-            className="w-full rounded-xl border border-gray-200 p-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4 shadow-xs"
-            rows={3}
-          />
-
-          {/* Pharmacy Fulfillment Checkbox Toggle */}
-          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
-            <input
-              type="checkbox"
-              id="pharmacyConsent"
-              checked={pharmacyConsent}
-              onChange={(e) => setPharmacyConsent(e.target.checked)}
-              className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500 cursor-pointer"
-            />
-            <label htmlFor="pharmacyConsent" className="text-xs font-semibold text-gray-700 cursor-pointer">
-              Fulfill via Hospital In-House Pharmacy (Dispatches copy directly to Hospital Pharmacy Desk)
-            </label>
-          </div>
-
-          {/* Send Action Button */}
-          <button
-            type="button"
-            onClick={handleSendPrescription}
-            data-testid="send-prescription-btn"
-            className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Send size={16} />
-            <span>📲 Send Prescription &amp; Dispatch Notification</span>
-          </button>
-        </div>
+        <PrescriptionModule patientId={activeRec?.id || 'PAT-DEMO-001'} activeRecord={activeRec} />
       </div>
     </div>
   );
