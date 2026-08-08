@@ -24,6 +24,10 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { RiskService } from '@/src/services/risk.service';
+import { FollowUpStatus } from '@/lib/validations/patientSchema';
+import { generatePatientSummaryPDF } from '@/lib/reportExporter';
+
+export type { FollowUpStatus };
 
 export interface PatientRecord {
   id?: string;
@@ -31,6 +35,14 @@ export interface PatientRecord {
   patient_name: string;
   phone_number: string;
   symptoms: string;
+  followUpStatus?: FollowUpStatus;
+  clinicianNote?: string;
+  triage_level?: string;
+  risk_score?: number;
+  recommendations?: string;
+  ai_summary?: string;
+  age?: string;
+  department?: string;
   kiosk_data?: {
     age?: string;
     sex?: string;
@@ -118,6 +130,11 @@ const MOCK_RECORDS: PatientRecord[] = [
     patient_name: 'Rajesh Sharma',
     phone_number: '+91 9876543210',
     symptoms: 'High fever for 2 days, severe headache and body pain.',
+    followUpStatus: 'Requires Attention',
+    clinicianNote: 'Patient requires CBC and Dengue NS1 antigen test. Advised hydration and paracetamol 650mg.',
+    triage_level: 'HIGH',
+    risk_score: 65,
+    department: 'General Practice',
     kiosk_data: {
       age: '45',
       sex: 'Male',
@@ -138,6 +155,11 @@ const MOCK_RECORDS: PatientRecord[] = [
     patient_name: 'Priya Verma',
     phone_number: '+91 9123456789',
     symptoms: 'Acute chest pain radiating to left shoulder and breathlessness.',
+    followUpStatus: 'In Progress',
+    clinicianNote: 'ECG dispatched to STAT cardiology desk. Troponin I blood draw ordered. High risk telemetry active.',
+    triage_level: 'CRITICAL',
+    risk_score: 95,
+    department: 'Cardiology',
     kiosk_data: {
       age: '58',
       sex: 'Female',
@@ -167,6 +189,11 @@ const MOCK_RECORDS: PatientRecord[] = [
     patient_name: 'Amit Patel',
     phone_number: '+1 2025550143',
     symptoms: 'Mild cough and runny nose for 1 day. General malaise.',
+    followUpStatus: 'Completed',
+    clinicianNote: 'Routine upper respiratory viral infection. OTC saline spray and rest advised. Follow up if fever develops.',
+    triage_level: 'LOW',
+    risk_score: 15,
+    department: 'General Practice',
     kiosk_data: {
       age: '32',
       sex: 'Male',
@@ -189,6 +216,9 @@ export default function DoctorDashboardClient() {
   const [selectedRecord, setSelectedRecord] = useState<PatientRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'alert' | 'normal'>('all');
+  const [selectedSeverity, setSelectedSeverity] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW'>('ALL');
+  const [selectedFollowUp, setSelectedFollowUp] = useState<'ALL' | FollowUpStatus>('ALL');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
   const [aiVitalsSummary, setAiVitalsSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
@@ -333,15 +363,39 @@ export default function DoctorDashboardClient() {
   const isMildRecord = (status?: string) =>
     status === 'MILD_ABNORMAL' || status === 'mild';
 
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setSelectedSeverity('ALL');
+    setSelectedFollowUp('ALL');
+    setSelectedDepartment('ALL');
+  };
+
   const filteredRecords = records.filter((rec) => {
-    const status = rec.kiosk_data?.vitals?.status || 'NORMAL';
+    const q = searchTerm.toLowerCase().trim();
     const matchesSearch =
-      rec.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rec.phone_number.includes(searchTerm) ||
-      rec.symptoms.toLowerCase().includes(searchTerm.toLowerCase());
+      !q ||
+      rec.patient_name?.toLowerCase().includes(q) ||
+      rec.phone_number?.includes(q) ||
+      rec.symptoms?.toLowerCase().includes(q) ||
+      rec.clinicianNote?.toLowerCase().includes(q);
+
     if (!matchesSearch) return false;
+
+    const rRisk = evaluateRecordRisk(rec);
+    const recSeverity = rRisk.category || rec.triage_level || 'LOW';
+    if (selectedSeverity !== 'ALL' && recSeverity !== selectedSeverity) return false;
+
+    const recFollowUp = rec.followUpStatus || 'Pending';
+    if (selectedFollowUp !== 'ALL' && recFollowUp !== selectedFollowUp) return false;
+
+    const recDept = rec.department || rec.kiosk_data?.triage?.department || 'General Practice';
+    if (selectedDepartment !== 'ALL' && !recDept.toLowerCase().includes(selectedDepartment.toLowerCase())) return false;
+
+    const status = rec.kiosk_data?.vitals?.status || 'NORMAL';
     if (filterStatus === 'alert') return isAlertRecord(status) || isMildRecord(status);
     if (filterStatus === 'normal') return !isAlertRecord(status) && !isMildRecord(status);
+
     return true;
   });
 
@@ -357,6 +411,50 @@ export default function DoctorDashboardClient() {
       fetchTimelineEvents(pid);
     }
   }, [activeRec, fetchTimelineEvents]);
+
+  // STEP 1.3: Update Follow-Up Status & Clinician Note with persistence
+  const handleUpdateFollowUp = async (
+    statusVal: FollowUpStatus,
+    noteVal: string
+  ) => {
+    const updatedRecords = records.map((r) => {
+      if (r.id === activeRec.id || r.patient_name === activeRec.patient_name) {
+        return {
+          ...r,
+          followUpStatus: statusVal,
+          clinicianNote: noteVal,
+        };
+      }
+      return r;
+    });
+
+    setRecords(updatedRecords);
+    if (selectedRecord) {
+      setSelectedRecord({
+        ...selectedRecord,
+        followUpStatus: statusVal,
+        clinicianNote: noteVal,
+      });
+    }
+
+    try {
+      const supabase = createClient();
+      if (activeRec.id) {
+        await supabase
+          .from('patient_records')
+          .update({
+            kiosk_data: {
+              ...activeRec.kiosk_data,
+              followUpStatus: statusVal,
+              clinicianNote: noteVal,
+            },
+          })
+          .eq('id', activeRec.id);
+      }
+    } catch (err) {
+      console.warn('Supabase follow-up persistence notice:', err);
+    }
+  };
 
   // STEP 3: DISPATCH LOGIC HANDLER
   const handleSendPrescription = () => {
@@ -399,32 +497,92 @@ export default function DoctorDashboardClient() {
               </h1>
             </div>
           </div>
-          <button
-            onClick={() => { fetchRecords(); fetchAiVitalsSummary(); }}
-            data-testid="refresh-doctor-records-btn"
-            className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <RefreshCcw size={14} className={loading || isSummarizing ? 'animate-spin' : ''} />
-            Refresh Live Data
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => generatePatientSummaryPDF(activeRec)}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <span>📥</span> Download Summary Report (PDF)
+            </button>
+            <button
+              onClick={() => { fetchRecords(); fetchAiVitalsSummary(); }}
+              data-testid="refresh-doctor-records-btn"
+              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <RefreshCcw size={14} className={loading || isSummarizing ? 'animate-spin' : ''} />
+              Refresh Live Data
+            </button>
+          </div>
         </div>
 
         {/* STEP 1: PATIENT QUEUE BAR WITH SMOOTH HORIZONTAL SCROLL */}
+        {/* STEP 2.2: MULTI-FILTER BAR & PATIENT QUEUE PILLS */}
         <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-72 shrink-0">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+            {/* Search Input Bar */}
+            <div className="relative w-full md:w-64 shrink-0">
               <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search patient name, phone..."
+                placeholder="Search name, symptoms, notes..."
                 data-testid="search-doctor-input"
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-teal-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-teal-500 text-slate-800"
               />
             </div>
 
-            {/* Horizontal Scroll Queue Pills */}
+            {/* Filter Dropdown Selectors */}
+            <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+              <select
+                value={selectedSeverity}
+                onChange={(e) => setSelectedSeverity(e.target.value as any)}
+                className="px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-teal-500 cursor-pointer"
+              >
+                <option value="ALL">Severity: All</option>
+                <option value="CRITICAL">🚨 Critical</option>
+                <option value="HIGH">⚠️ High</option>
+                <option value="MODERATE">⚡ Moderate</option>
+                <option value="LOW">✅ Low</option>
+              </select>
+
+              <select
+                value={selectedFollowUp}
+                onChange={(e) => setSelectedFollowUp(e.target.value as any)}
+                className="px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-teal-500 cursor-pointer"
+              >
+                <option value="ALL">Follow-Up: All</option>
+                <option value="Pending">🟡 Pending</option>
+                <option value="In Progress">🔵 In Progress</option>
+                <option value="Requires Attention">🚨 Requires Attention</option>
+                <option value="Completed">🟢 Completed</option>
+              </select>
+
+              <select
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+                className="px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-teal-500 cursor-pointer"
+              >
+                <option value="ALL">Dept: All</option>
+                <option value="General Practice">General Practice</option>
+                <option value="Cardiology">Cardiology</option>
+                <option value="Emergency">Emergency</option>
+                <option value="Pulmonology">Pulmonology</option>
+              </select>
+
+              {(searchTerm || selectedSeverity !== 'ALL' || selectedFollowUp !== 'ALL' || selectedDepartment !== 'ALL') && (
+                <button
+                  onClick={resetAllFilters}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Horizontal Scroll Queue Pills */}
+          {filteredRecords.length > 0 ? (
             <div className="flex items-center gap-2 overflow-x-auto flex-nowrap py-2 max-w-full w-full scrollbar-thin scrollbar-thumb-teal-500 scrollbar-track-slate-100">
               {filteredRecords.map((r) => {
                 const rRisk = evaluateRecordRisk(r);
@@ -434,7 +592,7 @@ export default function DoctorDashboardClient() {
                     key={r.id || r.patient_name}
                     onClick={() => setSelectedRecord(r)}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                      activeRec.patient_name === r.patient_name
+                      activeRec?.patient_name === r.patient_name
                         ? isCrit
                           ? 'bg-red-600 text-white shadow-md ring-2 ring-red-300'
                           : 'bg-teal-600 text-white shadow-md ring-2 ring-teal-300'
@@ -454,7 +612,20 @@ export default function DoctorDashboardClient() {
                 );
               })}
             </div>
-          </div>
+          ) : (
+            /* STEP 2.3: EMPTY-STATE COMPONENT */
+            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50/50 text-center my-4">
+              <div className="text-4xl mb-2">🔍</div>
+              <h3 className="text-base font-bold text-gray-800">No Matching Health Records Found</h3>
+              <p className="text-xs text-gray-500 mt-1 max-w-xs">No patient records match your active search query or filter selection.</p>
+              <button 
+                onClick={resetAllFilters} 
+                className="mt-3 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            </div>
+          )}
         </div>
 
         {/* STEP 1: AI Clinical Vitals & Past Record Summary Block (Positioned Above 3-Column Grid) */}
@@ -517,6 +688,41 @@ export default function DoctorDashboardClient() {
                   <span className="font-bold text-slate-700">{activeRec.kiosk_data.date}</span>
                 </div>
               )}
+
+              {/* Follow-Up Status Dropdown Badge */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Follow-Up Status</span>
+                <select
+                  value={activeRec.followUpStatus || 'Pending'}
+                  onChange={(e) => handleUpdateFollowUp(e.target.value as FollowUpStatus, activeRec.clinicianNote || '')}
+                  className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all outline-none cursor-pointer border ${
+                    activeRec.followUpStatus === 'Requires Attention'
+                      ? 'bg-red-100 text-red-900 border-red-300'
+                      : activeRec.followUpStatus === 'In Progress'
+                      ? 'bg-blue-100 text-blue-900 border-blue-300'
+                      : activeRec.followUpStatus === 'Completed'
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      : 'bg-amber-100 text-amber-900 border-amber-300'
+                  }`}
+                >
+                  <option value="Pending">🟡 Pending</option>
+                  <option value="In Progress">🔵 In Progress</option>
+                  <option value="Requires Attention">🚨 Requires Attention</option>
+                  <option value="Completed">🟢 Completed</option>
+                </select>
+              </div>
+
+              {/* Clinician Note Textarea */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Clinician Note</span>
+                <textarea
+                  rows={3}
+                  value={activeRec.clinicianNote || ''}
+                  onChange={(e) => handleUpdateFollowUp(activeRec.followUpStatus || 'Pending', e.target.value)}
+                  placeholder="Type attending clinician notes, observations, or follow-up orders..."
+                  className="w-full p-2 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-teal-500 outline-none text-slate-800"
+                />
+              </div>
             </div>
           </div>
 

@@ -95,5 +95,8 @@ export const patientSchema = z
     }
   });
 
+export type FollowUpStatus = 'Pending' | 'In Progress' | 'Completed' | 'Requires Attention';
+
 export const patientInfoSchema = patientSchema;
 export type PatientSchemaType = z.infer<typeof patientSchema>;
+
